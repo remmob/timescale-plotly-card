@@ -1,5 +1,4 @@
-# TimescaleDB Plotly Card v2.0
-
+# Timescale Plotly Card
 [![hacs_badge](https://img.shields.io/badge/HACS-Custom-orange.svg)](https://github.com/custom-components/hacs)
 
 A custom Lovelace card for Home Assistant that displays TimescaleDB historical data using interactive Plotly charts.
@@ -19,7 +18,7 @@ A custom Lovelace card for Home Assistant that displays TimescaleDB historical d
 ## Requirements
 
 
-> **Note:** The TimescaleDB Reader integration supports any TimescaleDB database. It has been tested with databases using the `ltss` table (from the [LTSS integration](https://github.com/freol35241/ltss)) and with [Scribe](https://github.com/jonathan-gatard/scribe). You do not need a special Home Assistant database; any compatible TimescaleDB schema will work. See the Timescale Database Reader [README](https://github.com/remmob/timescale_database_reader) for details and example queries.
+> **Note:** The Timescale database Reader integration supports any TimescaleDB database. It has been tested with databases using the `ltss` table (from the [LTSS integration](https://github.com/freol35241/ltss)) and with [Scribe](https://github.com/jonathan-gatard/scribe). You do not need a special Home Assistant database; any compatible TimescaleDB schema will work. See the Timescale Database Reader [README](https://github.com/remmob/timescale_database_reader) for details and example queries.
 ### HACS (Recommended)
 
 1. Add this repository as a custom repository in HACS:
