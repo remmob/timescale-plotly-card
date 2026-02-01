@@ -1,0 +1,67 @@
+# TimescaleDB Plotly Card - v2.0.0
+# Complete configuration with all options
+
+type: custom:timescale-plotly-card
+sensor_id: sensor.temperature_woonkamer
+title: Temperature Living Room
+
+# Time selection
+show_time_selector: true # Show time selector buttons (default: true)
+default_range: 12h # Start range: 1h, 2h, 3h, 6h, 12h, 24h, custom (default: 24h)
+
+# Data options
+downsample: 300 # Default: 300 seconds (5 minutes)
+height: 400 # Chart height in pixels
+y_margin: 2 # Y-axis margin above and below values (default: 5)
+
+# Chart styling
+line_color: rgb(75, 192, 192) # Line color
+line_width: 2 # Line thickness
+fill_color: rgba(75, 192, 192, 0.2) # Fill color
+# unit: °C # Y-axis unit (leave commented to auto-detect)
+
+# Layout options
+margin_top: 40 # Top margin
+margin_right: 10 # Right margin
+margin_bottom: 40 # Bottom margin
+margin_left: 50 # Left margin
+
+# Axis styling
+xaxis_title: Time # X-axis title
+# yaxis_title: Temperature # Y-axis title (leave commented to auto-detect)
+grid_color: rgba(128,128,128,0.2) # Grid line color
+
+# Background colors
+paper_bgcolor: rgba(0,0,0,0) # Outer chart background
+plot_bgcolor: rgba(0,0,0,0) # Inner chart background
+font_color: var(--primary-text-color) # Text color
+
+# Button styling
+selector_background: var(--card-background-color) # Selector background
+button_background: var(--primary-background-color) # Button background
+button_border: var(--divider-color) # Button border
+button_text: var(--primary-text-color) # Button text
+button_active: var(--primary-color) # Active button color
+button_radius: 4px # Button border radius
+
+# Modebar (toolbar) styling
+show_modebar: true # Show Plotly modebar (default: true)
+modebar_bg: rgba(255,255,255,0.9) # Modebar background color
+modebar_radius: 4px # Modebar border radius
+
+# Tooltip & hover line styling
+tooltip_bg: rgba(248, 11, 248, 0.9) # Tooltip background
+tooltip_text: "#ffffff" # Tooltip text color
+tooltip_border: rgba(255,255,255,0.2) # Tooltip border color
+hover_line_color: rgba(120,120,120,0.8) # Vertical hover line color
+
+# Download options
+download_theme: dark # Download theme: 'light' or 'dark' (default: dark/transparent)
+download_format: svg # Download format: png, svg, jpeg, webp
+download_filename: timescale_chart # Download filename
+download_width: 1200 # Download width in pixels
+download_height: 600 # Download height in pixels
+download_scale: 2 # Download scale (higher = better quality)
+
+# Auto-refresh
+auto_refresh: 300 # Auto-refresh interval in seconds (0 = disabled)

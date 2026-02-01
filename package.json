@@ -1,0 +1,26 @@
+{
+    "name": "timescale-plotly-card",
+    "version": "1.0.0",
+    "description": "A custom Lovelace card for displaying TimescaleDB data with Plotly charts",
+    "main": "timescale-plotly-card.js",
+    "scripts": {
+        "build": "echo 'No build step required - vanilla JS'"
+    },
+    "keywords": [
+        "home-assistant",
+        "lovelace",
+        "custom-card",
+        "timescaledb",
+        "plotly",
+        "chart"
+    ],
+    "author": "Your Name",
+    "license": "MIT",
+    "repository": {
+        "type": "git",
+        "url": "https://github.com/your-username/timescale-plotly-card"
+    },
+    "bugs": {
+        "url": "https://github.com/your-username/timescale-plotly-card/issues"
+    }
+}

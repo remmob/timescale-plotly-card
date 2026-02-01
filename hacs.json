@@ -1,0 +1,8 @@
+{
+    "name": "TimescaleDB Plotly Card",
+    "content_in_root": false,
+    "filename": "timescale-plotly-card.js",
+    "render_readme": true,
+    "zip_release": false,
+    "homeassistant": "2024.1.0"
+}
