@@ -113,39 +113,39 @@ class TimescalePlotlyCard extends HTMLElement {
           padding: 0;
           overflow: hidden;
         }
-        .time-selector {
-          display: flex;
-          gap: 8px;
-          padding: 12px 16px;
-          flex-wrap: wrap;
-          background: ${this._config.selector_background || 'var(--card-background-color, #1c1c1c)'};
-        }
-        .time-btn {
-          padding: 6px 12px;
-                    background: ${this._config.button_color || 'var(--primary-background-color, #2b2b2b)'};
-          border: 1px solid ${this._config.button_border || 'var(--divider-color, #3b3b3b)'};
-          color: ${this._config.button_text || 'var(--primary-text-color, #e1e1e1)'};
-          border-radius: ${this._config.button_radius || '4px'};
-          cursor: pointer;
-          font-size: 13px;
-          transition: all 0.2s;
-        }
-        .time-btn:hover {
+                .time-selector {
+                    display: flex;
+                    gap: 8px;
+                    padding: 12px 16px;
+                    flex-wrap: wrap;
+                    background: ${this._config.selector_background_color || this._config.selector_background || 'var(--card-background-color, #1c1c1c)'};
+                }
+                .time-btn {
+                    padding: 6px 12px;
+                    background: ${this._config.button_background_color || this._config.button_color || 'var(--primary-background-color, #2b2b2b)'};
+                    border: 1px solid ${this._config.button_border_color || this._config.button_border || 'var(--divider-color, #3b3b3b)'};
+                    color: ${this._config.button_text_color || this._config.button_text || 'var(--primary-text-color, #e1e1e1)'};
+                    border-radius: ${this._config.button_radius || '4px'};
+                    cursor: pointer;
+                    font-size: 13px;
+                    transition: all 0.2s;
+                }
+                .time-btn:hover {
                     background: ${this._config.button_hover_color || 'var(--secondary-background-color, #3b3b3b)'};
-                    color: ${this._config.button_hover_text || this._config.button_text || 'var(--primary-text-color, #e1e1e1)'};
-        }
-        .time-btn.active {
-          background: ${this._config.button_active || 'var(--primary-color, #03a9f4)'};
-          border-color: ${this._config.button_active || 'var(--primary-color, #03a9f4)'};
-                    color: ${this._config.button_active_text || 'white'};
-        }
+                    color: ${this._config.button_hover_text_color || this._config.button_hover_text || this._config.button_text_color || this._config.button_text || 'var(--primary-text-color, #e1e1e1)'};
+                }
+                .time-btn.active {
+                    background: ${this._config.button_active_color || this._config.button_active || 'var(--primary-color, #03a9f4)'};
+                    border-color: ${this._config.button_active_color || this._config.button_active || 'var(--primary-color, #03a9f4)'};
+                    color: ${this._config.button_active_text_color || this._config.button_active_text || 'white'};
+                }
                 .custom-range {
                     display: none;
                     padding: 12px 16px;
                     gap: 12px;
                     flex-wrap: wrap;
-                    background: ${this._config.custom_range_background || 'var(--card-background-color, #1c1c1c)'};
-                    border-top: 1px solid ${this._config.custom_range_border || 'var(--divider-color, #3b3b3b)'};
+                    background: ${this._config.custom_range_background_color || this._config.custom_range_background || 'var(--card-background-color, #1c1c1c)'};
+                    border-top: 1px solid ${this._config.custom_range_border_color || this._config.custom_range_border || 'var(--divider-color, #3b3b3b)'};
                 }
         .custom-range.visible {
           display: flex;
