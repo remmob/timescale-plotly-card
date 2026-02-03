@@ -122,7 +122,7 @@ class TimescalePlotlyCard extends HTMLElement {
         }
         .time-btn {
           padding: 6px 12px;
-          background: ${this._config.button_background || 'var(--primary-background-color, #2b2b2b)'};
+                    background: ${this._config.button_color || 'var(--primary-background-color, #2b2b2b)'};
           border: 1px solid ${this._config.button_border || 'var(--divider-color, #3b3b3b)'};
           color: ${this._config.button_text || 'var(--primary-text-color, #e1e1e1)'};
           border-radius: ${this._config.button_radius || '4px'};
@@ -131,50 +131,84 @@ class TimescalePlotlyCard extends HTMLElement {
           transition: all 0.2s;
         }
         .time-btn:hover {
-          background: var(--secondary-background-color, #3b3b3b);
+                    background: ${this._config.button_hover_color || 'var(--secondary-background-color, #3b3b3b)'};
+                    color: ${this._config.button_hover_text || this._config.button_text || 'var(--primary-text-color, #e1e1e1)'};
         }
         .time-btn.active {
           background: ${this._config.button_active || 'var(--primary-color, #03a9f4)'};
           border-color: ${this._config.button_active || 'var(--primary-color, #03a9f4)'};
-          color: white;
+                    color: ${this._config.button_active_text || 'white'};
         }
-        .custom-range {
-          display: none;
-          padding: 12px 16px;
-          gap: 12px;
-          flex-wrap: wrap;
-          background: var(--card-background-color, #1c1c1c);
-          border-top: 1px solid var(--divider-color, #3b3b3b);
-        }
+                .custom-range {
+                    display: none;
+                    padding: 12px 16px;
+                    gap: 12px;
+                    flex-wrap: wrap;
+                    background: ${this._config.custom_range_background || 'var(--card-background-color, #1c1c1c)'};
+                    border-top: 1px solid ${this._config.custom_range_border || 'var(--divider-color, #3b3b3b)'};
+                }
         .custom-range.visible {
           display: flex;
         }
         .custom-range label {
-          color: var(--primary-text-color, #e1e1e1);
-          font-size: 13px;
+                    color: ${this._config.custom_range_text || 'var(--primary-text-color, #e1e1e1)'};
+                    font-size: ${this._config.custom_range_label_size || '13px'};
         }
         .custom-range input {
-          background: var(--primary-background-color, #2b2b2b);
-          border: 1px solid var(--divider-color, #3b3b3b);
-          color: var(--primary-text-color, #e1e1e1);
-          padding: 4px 8px;
-          border-radius: 4px;
-          margin-left: 6px;
+                    background: ${this._config.date_input_background || 'var(--primary-background-color, #2b2b2b)'};
+                    border: 1px solid ${this._config.date_input_border || 'var(--divider-color, #3b3b3b)'};
+                    color: ${this._config.date_input_text || 'var(--primary-text-color, #e1e1e1)'};
+                    padding: ${this._config.date_input_padding || '4px 8px'};
+                    border-radius: ${this._config.date_input_radius || '4px'};
+                    margin-left: 6px;
+                    font-size: ${this._config.date_input_size || '13px'};
+                    accent-color: ${this._config.date_input_accent || 'var(--primary-color, #03a9f4)'};
+                    color-scheme: ${this._config.date_input_scheme || 'dark'};
+                    caret-color: ${this._config.date_input_caret || this._config.date_input_text || 'var(--primary-text-color, #e1e1e1)'};
         }
+                .custom-range input:focus {
+                    outline: none;
+                    box-shadow: 0 0 0 2px ${this._config.date_input_focus || 'rgba(3,169,244,0.4)'};
+                }
+                .custom-range input::-webkit-calendar-picker-indicator {
+                    filter: ${this._config.date_picker_icon_filter || 'invert(0.9)'};
+                    opacity: ${this._config.date_picker_icon_opacity || '0.8'};
+                }
+                .custom-range input::-webkit-datetime-edit {
+                    color: ${this._config.date_input_text || 'var(--primary-text-color, #e1e1e1)'};
+                }
+                .custom-range input::-webkit-datetime-edit-fields-wrapper {
+                    background: ${this._config.date_input_field_background || 'transparent'};
+                }
+                .custom-range input::-webkit-datetime-edit-text,
+                .custom-range input::-webkit-datetime-edit-month-field,
+                .custom-range input::-webkit-datetime-edit-day-field,
+                .custom-range input::-webkit-datetime-edit-year-field,
+                .custom-range input::-webkit-datetime-edit-hour-field,
+                .custom-range input::-webkit-datetime-edit-minute-field,
+                .custom-range input::-webkit-datetime-edit-ampm-field {
+                    color: ${this._config.date_input_text || 'var(--primary-text-color, #e1e1e1)'};
+                }
         #apply-custom {
-          padding: 6px 16px;
-          background: var(--primary-color, #03a9f4);
-          border: none;
-          color: white;
-          border-radius: 4px;
-          cursor: pointer;
-          font-size: 13px;
+                    padding: ${this._config.apply_button_padding || '6px 16px'};
+                    background: ${this._config.apply_button_background || 'var(--primary-color, #03a9f4)'};
+                    border: 1px solid ${this._config.apply_button_border || 'transparent'};
+                    color: ${this._config.apply_button_text || 'white'};
+                    border-radius: ${this._config.apply_button_radius || '4px'};
+                    cursor: pointer;
+                    font-size: ${this._config.apply_button_size || '13px'};
+                    transition: all 0.2s;
         }
-        #status {
-          color: var(--secondary-text-color, #9b9b9b);
-          font-size: 12px;
-          padding: 8px 16px;
-        }
+                #apply-custom:hover {
+                    background: ${this._config.apply_button_hover || 'var(--primary-color, #03a9f4)'};
+                    filter: ${this._config.apply_button_hover_filter || 'brightness(1.05)'};
+                }
+                #status {
+                    color: ${this._config.status_text_color || 'var(--secondary-text-color, #9b9b9b)'};
+                    font-size: ${this._config.status_text_size || '12px'};
+                    padding: ${this._config.status_text_padding || '8px 16px'};
+                    font-weight: ${this._config.status_text_weight || 'normal'};
+                }
                 #chart {
                     width: 100%;
                     max-width: 100%;
@@ -206,6 +240,15 @@ class TimescalePlotlyCard extends HTMLElement {
           display: inline-block !important;
           margin: 0 2px !important;
         }
+                #chart .modebar-btn path {
+                    fill: ${this._config.modebar_icon_color || 'var(--primary-text-color, #3b3b3b)'} !important;
+                }
+                #chart .modebar-btn:hover path {
+                    fill: ${this._config.modebar_icon_hover || this._config.modebar_icon_color || 'var(--primary-color, #03a9f4)'} !important;
+                }
+                #chart .modebar-btn.active path {
+                    fill: ${this._config.modebar_icon_active || this._config.modebar_icon_color || 'var(--primary-color, #03a9f4)'} !important;
+                }
                 .hoverlayer .hovertext {
                     background-color: rgba(0,0,0,0.9) !important;
                     color: white !important;
@@ -402,12 +445,14 @@ class TimescalePlotlyCard extends HTMLElement {
                 autosize: false,
                 xaxis: {
                     title: this._config.xaxis_title || 'Time',
-                    gridcolor: this._config.grid_color || 'rgba(128,128,128,0.2)'
+                    gridcolor: this._config.grid_color || 'rgba(128,128,128,0.2)',
+                    tickpadding: this._config.xaxis_tick_padding || 6
                 },
                 yaxis: {
                     title: this._config.yaxis_title || unitFromState || this._config.unit || '',
                     range: [yMin, yMax],
-                    gridcolor: this._config.grid_color || 'rgba(128,128,128,0.2)'
+                    gridcolor: this._config.grid_color || 'rgba(128,128,128,0.2)',
+                    tickpadding: this._config.yaxis_tick_padding || 6
                 },
                 paper_bgcolor: this._config.paper_bgcolor || (this._config.download_theme !== 'dark' ? 'white' : 'rgba(0,0,0,0)'),
                 plot_bgcolor: this._config.plot_bgcolor || (this._config.download_theme !== 'dark' ? '#f5f5f5' : 'rgba(0,0,0,0)'),

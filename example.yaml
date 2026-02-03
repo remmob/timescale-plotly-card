@@ -30,29 +30,74 @@ margin_left: 50 # Left margin
 xaxis_title: Time # X-axis title
 # yaxis_title: Temperature # Y-axis title (leave commented to auto-detect)
 grid_color: rgba(128,128,128,0.2) # Grid line color
+xaxis_tick_padding: 6 # Space between grid and bottom tick labels
+yaxis_tick_padding: 6 # Space between grid and left tick labels
 
 # Background colors
-paper_bgcolor: rgba(0,0,0,0) # Outer chart background
-plot_bgcolor: rgba(0,0,0,0) # Inner chart background
+paper_bg_color: rgba(0,0,0,0) # Outer chart background
+plot_bg_color: rgba(0,0,0,0) # Inner chart background
 font_color: var(--primary-text-color) # Text color
 
 # Button styling
-selector_background: var(--card-background-color) # Selector background
-button_background: var(--primary-background-color) # Button background
-button_border: var(--divider-color) # Button border
-button_text: var(--primary-text-color) # Button text
-button_active: var(--primary-color) # Active button color
+selector_background_color: var(--card-background-color) # Selector background
+button_background_color: var(--primary-background-color) # Button background
+button_border_color: var(--divider-color) # Button border
+button_text_color: var(--primary-text-color) # Button text
+button_active_color: var(--primary-color) # Active button color
 button_radius: 4px # Button border radius
+button_hover_color: var(--secondary-background-color) # Button hover background
+button_hover_text_color: var(--primary-text-color) # Button hover text
+button_active_text_color: white # Button active text
 
 # Modebar (toolbar) styling
 show_modebar: true # Show Plotly modebar (default: true)
-modebar_bg: rgba(255,255,255,0.9) # Modebar background color
+modebar_bg_color: rgba(255,255,255,0.9) # Modebar background color
 modebar_radius: 4px # Modebar border radius
+modebar_icon_color: var(--primary-text-color) # Modebar icon color
+modebar_icon_hover_color: var(--primary-color) # Modebar icon hover color
+modebar_icon_active_color: var(--primary-color) # Modebar icon active color
+
+# Custom range styling
+custom_range_background_color: var(--card-background-color) # Custom range background
+custom_range_border_color: var(--divider-color) # Custom range top border
+custom_range_text_color: var(--primary-text-color) # Custom range label text
+custom_range_label_size: 13px # Custom range label size
+
+# Date input styling
+date_input_background_color: var(--primary-background-color) # Input background
+date_input_border_color: var(--divider-color) # Input border
+date_input_text_color: var(--primary-text-color) # Input text
+date_input_padding: 4px 8px # Input padding
+date_input_radius: 4px # Input radius
+date_input_size: 13px # Input text size
+date_input_accent_color: var(--primary-color) # Input accent
+date_input_scheme: dark # Popup scheme (dark/light)
+date_input_focus_color: rgba(3,169,244,0.4) # Focus ring color
+date_input_caret_color: var(--primary-text-color) # Caret color
+date_input_field_background_color: transparent # Inner field background
+date_picker_icon_filter: invert(0.9) # Picker icon filter
+date_picker_icon_opacity: 0.8 # Picker icon opacity
+
+# Apply button styling
+apply_button_padding: 6px 16px # Apply button padding
+apply_button_background_color: var(--primary-color) # Apply button background
+apply_button_border_color: transparent # Apply button border
+apply_button_text_color: white # Apply button text
+apply_button_radius: 4px # Apply button radius
+apply_button_size: 13px # Apply button text size
+apply_button_hover_color: var(--primary-color) # Apply hover background
+apply_button_hover_filter: brightness(1.05) # Apply hover filter
+
+# Status text styling
+status_text_color: var(--secondary-text-color) # Status text color
+status_text_size: 12px # Status text size
+status_text_padding: 8px 16px # Status text padding
+status_text_weight: normal # Status text weight
 
 # Tooltip & hover line styling
-tooltip_bg: rgba(248, 11, 248, 0.9) # Tooltip background
-tooltip_text: "#ffffff" # Tooltip text color
-tooltip_border: rgba(255,255,255,0.2) # Tooltip border color
+tooltip_bg_color: rgba(248, 11, 248, 0.9) # Tooltip background
+tooltip_text_color: "#ffffff" # Tooltip text color
+tooltip_border_color: rgba(255,255,255,0.2) # Tooltip border color
 hover_line_color: rgba(120,120,120,0.8) # Vertical hover line color
 
 # Download options
