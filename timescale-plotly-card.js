@@ -191,16 +191,16 @@ class TimescalePlotlyCard extends HTMLElement {
                 }
         #apply-custom {
                     padding: ${this._config.apply_button_padding || '6px 16px'};
-                    background: ${this._config.apply_button_background || 'var(--primary-color, #03a9f4)'};
-                    border: 1px solid ${this._config.apply_button_border || 'transparent'};
-                    color: ${this._config.apply_button_text || 'white'};
+                    background: ${this._config.apply_button_background_color || this._config.apply_button_background || 'var(--primary-color, #03a9f4)'};
+                    border: 1px solid ${this._config.apply_button_border_color || this._config.apply_button_border || 'transparent'};
+                    color: ${this._config.apply_button_text_color || this._config.apply_button_text || 'white'};
                     border-radius: ${this._config.apply_button_radius || '4px'};
                     cursor: pointer;
                     font-size: ${this._config.apply_button_size || '13px'};
                     transition: all 0.2s;
         }
                 #apply-custom:hover {
-                    background: ${this._config.apply_button_hover || 'var(--primary-color, #03a9f4)'};
+                    background: ${this._config.apply_button_hover_color || this._config.apply_button_hover || 'var(--primary-color, #03a9f4)'};
                     filter: ${this._config.apply_button_hover_filter || 'brightness(1.05)'};
                 }
                 #status {
@@ -225,7 +225,7 @@ class TimescalePlotlyCard extends HTMLElement {
           display: flex !important;
           flex-direction: row !important;
           gap: 8px !important;
-          background: ${this._config.modebar_bg || 'rgba(255,255,255,0.9)'} !important;
+          background: ${this._config.modebar_bg_color || this._config.modebar_bgcolor || this._config.modebar_bg || 'rgba(255,255,255,0.9)'} !important;
           border-radius: ${this._config.modebar_radius || '4px'} !important;
           padding: 6px !important;
           box-shadow: 0 2px 4px rgba(0,0,0,0.2) !important;
@@ -263,10 +263,10 @@ class TimescalePlotlyCard extends HTMLElement {
                     display: none;
                     padding: 6px 8px;
                     border-radius: 4px;
-                    background: ${this._config.tooltip_bg || 'rgba(0,0,0,0.9)'};
-                    color: ${this._config.tooltip_text || '#fff'};
+                    background: ${this._config.tooltip_bg_color || this._config.tooltip_bg || 'rgba(0,0,0,0.9)'};
+                    color: ${this._config.tooltip_text_color || this._config.tooltip_text || '#fff'};
                     font-size: 12px;
-                    border: 1px solid ${this._config.tooltip_border || 'rgba(255,255,255,0.2)'};
+                    border: 1px solid ${this._config.tooltip_border_color || this._config.tooltip_border || 'rgba(255,255,255,0.2)'};
                     pointer-events: none;
                     z-index: 10001;
                     white-space: nowrap;
@@ -397,7 +397,7 @@ class TimescalePlotlyCard extends HTMLElement {
             const minValue = Math.min(...y);
             const maxValue = Math.max(...y);
             const margin = this._config.y_margin || 5;  // Default 5 units margin
-            const yMin = minValue - margin;
+            const yMin = minValue >= 0 ? minValue : (minValue - margin);
             const yMax = maxValue + margin;
 
             statusEl.textContent = `${response.length} points (${downsample}s interval)`;
@@ -446,13 +446,17 @@ class TimescalePlotlyCard extends HTMLElement {
                 xaxis: {
                     title: this._config.xaxis_title || 'Time',
                     gridcolor: this._config.grid_color || 'rgba(128,128,128,0.2)',
-                    ticklabelpadding: this._config.xaxis_tick_padding || 6
+                    ticklabelpadding: this._config.xaxis_tick_padding || 6,
+                    ticklabelstandoff: this._config.xaxis_tick_padding || 6,
+                    automargin: true
                 },
                 yaxis: {
                     title: this._config.yaxis_title || unitFromState || this._config.unit || '',
                     range: [yMin, yMax],
                     gridcolor: this._config.grid_color || 'rgba(128,128,128,0.2)',
-                    ticklabelpadding: this._config.yaxis_tick_padding || 6
+                    ticklabelpadding: this._config.yaxis_tick_padding || 6,
+                    ticklabelstandoff: this._config.yaxis_tick_padding || 6,
+                    automargin: true
                 },
                 paper_bgcolor: this._config.paper_bgcolor || 'rgba(0,0,0,0)',
                 plot_bgcolor: this._config.plot_bgcolor || 'rgba(0,0,0,0)',
