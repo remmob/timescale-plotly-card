@@ -244,10 +244,10 @@ class TimescalePlotlyCard extends HTMLElement {
                     fill: ${this._config.modebar_icon_color || 'var(--primary-text-color, #3b3b3b)'} !important;
                 }
                 #chart .modebar-btn:hover path {
-                    fill: ${this._config.modebar_icon_hover || this._config.modebar_icon_color || 'var(--primary-color, #03a9f4)'} !important;
+                    fill: ${this._config.modebar_icon_hover_color || this._config.modebar_icon_hover || this._config.modebar_icon_color || 'var(--primary-color, #03a9f4)'} !important;
                 }
                 #chart .modebar-btn.active path {
-                    fill: ${this._config.modebar_icon_active || this._config.modebar_icon_color || 'var(--primary-color, #03a9f4)'} !important;
+                    fill: ${this._config.modebar_icon_active_color || this._config.modebar_icon_active || this._config.modebar_icon_color || 'var(--primary-color, #03a9f4)'} !important;
                 }
                 .hoverlayer .hovertext {
                     background-color: rgba(0,0,0,0.9) !important;
@@ -446,18 +446,18 @@ class TimescalePlotlyCard extends HTMLElement {
                 xaxis: {
                     title: this._config.xaxis_title || 'Time',
                     gridcolor: this._config.grid_color || 'rgba(128,128,128,0.2)',
-                    tickpadding: this._config.xaxis_tick_padding || 6
+                    ticklabelpadding: this._config.xaxis_tick_padding || 6
                 },
                 yaxis: {
                     title: this._config.yaxis_title || unitFromState || this._config.unit || '',
                     range: [yMin, yMax],
                     gridcolor: this._config.grid_color || 'rgba(128,128,128,0.2)',
-                    tickpadding: this._config.yaxis_tick_padding || 6
+                    ticklabelpadding: this._config.yaxis_tick_padding || 6
                 },
-                paper_bgcolor: this._config.paper_bgcolor || (this._config.download_theme !== 'dark' ? 'white' : 'rgba(0,0,0,0)'),
-                plot_bgcolor: this._config.plot_bgcolor || (this._config.download_theme !== 'dark' ? '#f5f5f5' : 'rgba(0,0,0,0)'),
+                paper_bgcolor: this._config.paper_bgcolor || 'rgba(0,0,0,0)',
+                plot_bgcolor: this._config.plot_bgcolor || 'rgba(0,0,0,0)',
                 font: {
-                    color: this._config.font_color || (this._config.download_theme !== 'dark' ? '#333' : 'var(--primary-text-color, #e1e1e1)')
+                    color: this._config.font_color || 'var(--primary-text-color, #e1e1e1)'
                 },
                 hovermode: 'closest',
                 hoverlabel: {
@@ -476,7 +476,11 @@ class TimescalePlotlyCard extends HTMLElement {
                     filename: this._config.download_filename || 'timescale_chart',
                     height: this._config.download_height || 500,
                     width: this._config.download_width || 700,
-                    scale: this._config.download_scale || 2
+                    scale: this._config.download_scale || 2,
+                    // Override background and font for download only
+                    paper_bgcolor: this._config.download_theme === 'light' ? 'white' : (this._config.download_theme === 'dark' ? 'rgba(0,0,0,0)' : (this._config.paper_bgcolor || 'rgba(0,0,0,0)')),
+                    plot_bgcolor: this._config.download_theme === 'light' ? '#f5f5f5' : (this._config.download_theme === 'dark' ? 'rgba(0,0,0,0)' : (this._config.plot_bgcolor || 'rgba(0,0,0,0)')),
+                    font: { color: this._config.download_theme === 'light' ? '#333' : (this._config.download_theme === 'dark' ? 'var(--primary-text-color, #e1e1e1)' : (this._config.font_color || 'var(--primary-text-color, #e1e1e1)')) }
                 }
             });
 
