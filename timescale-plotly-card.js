@@ -402,9 +402,17 @@ class TimescalePlotlyCard extends HTMLElement {
             const unitSuffix = unitSuffixValue ? ` ${unitSuffixValue}` : '';
             const friendlyName = stateObj?.attributes?.friendly_name;
             const configuredLabel = this._config.yaxis_title;
-            const labelText = configuredLabel && configuredLabel !== this._config.sensor_id
-                ? configuredLabel
-                : (friendlyName || configuredLabel || this._config.sensor_id || 'Value');
+            const valueLabel = this._config.tooltip_label_text;
+            const sensorId = this._config.sensor_id;
+            const sensorIdShort = sensorId ? sensorId.split('.').pop() : undefined;
+            const configuredIsId = configuredLabel && (configuredLabel === sensorId || configuredLabel === sensorIdShort);
+            const labelText = valueLabel
+                || (configuredLabel && !configuredIsId ? configuredLabel : undefined)
+                || friendlyName
+                || configuredLabel
+                || sensorIdShort
+                || sensorId
+                || 'Value';
 
             // Calculate automatic Y-axis range with margin
             const minValue = Math.min(...y);
@@ -457,14 +465,14 @@ class TimescalePlotlyCard extends HTMLElement {
                 },
                 autosize: false,
                 xaxis: {
-                    title: this._config.xaxis_title || 'Time',
+                    title: { text: this._config.xaxis_title || 'Time' },
                     gridcolor: this._config.grid_color || 'rgba(128,128,128,0.2)',
                     ticklabelpadding: this._config.xaxis_tick_padding || 6,
                     ticklabelstandoff: this._config.xaxis_tick_padding || 6,
                     automargin: true
                 },
                 yaxis: {
-                    title: this._config.yaxis_title || unitFromState || this._config.unit || '',
+                    title: { text: this._config.yaxis_title || unitFromState || this._config.unit || '' },
                     range: [yMin, yMax],
                     gridcolor: this._config.grid_color || 'rgba(128,128,128,0.2)',
                     ticklabelpadding: this._config.yaxis_tick_padding || 6,
@@ -665,6 +673,11 @@ class TimescalePlotlyCard extends HTMLElement {
                     modebar.style.top = '-12px';
                     modebar.style.right = '10px';
                     modebar.style.zIndex = '10001';
+                    const modebarBg = this._config.modebar_bg_color || this._config.modebar_bgcolor || this._config.modebar_bg || 'rgba(255,255,255,0.9)';
+                    modebar.style.background = modebarBg;
+                    modebar.style.backgroundColor = modebarBg;
+                    modebar.style.borderRadius = this._config.modebar_radius || '4px';
+                    modebar.style.padding = '6px';
                 }
             }, 100);
 

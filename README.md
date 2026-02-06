@@ -128,6 +128,12 @@ The toolbar in the top-right corner provides:
 | `y_margin` | number | `5` | Y-axis margin above/below data values (bottom margin is 0 when min is between 0 and `y_margin`) |
 | `height` | number | `400` | Chart height in pixels |
 
+### Tooltip & Status Text
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `tooltip_label_text` | string | friendly name | Label used in tooltip and status text |
+
 ### Chart Styling
 
 | Option | Type | Default | Description |

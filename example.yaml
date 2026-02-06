@@ -29,6 +29,7 @@ margin_left: 50 # Left margin
 # Axis styling
 xaxis_title: Time # X-axis title
 # yaxis_title: Temperature # Y-axis title (leave commented to auto-detect)
+tooltip_label_text: Temperature Living Room # Tooltip/status label (optional)
 grid_color: rgba(128,128,128,0.2) # Grid line color
 xaxis_tick_padding: 6 # Space between grid and bottom tick labels
 yaxis_tick_padding: 6 # Space between grid and left tick labels
@@ -51,7 +52,8 @@ button_active_text_color: white # Button active text
 
 # Modebar (toolbar) styling
 show_modebar: true # Show Plotly modebar (default: true)
-modebar_bgcolor: rgba(255,255,255,0.9) # Modebar background color
+# Use one of: modebar_bg_color | modebar_bgcolor | modebar_bg
+modebar_bg_color: rgba(255,255,255,0.9) # Modebar background color
 modebar_radius: 4px # Modebar border radius
 modebar_icon_color: var(--primary-text-color) # Modebar icon color
 modebar_icon_hover_color: var(--primary-color) # Modebar icon hover color
