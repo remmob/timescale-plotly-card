@@ -155,30 +155,30 @@ class TimescalePlotlyCard extends HTMLElement {
                     font-size: ${this._config.custom_range_label_size || '13px'};
         }
         .custom-range input {
-                    background: ${this._config.date_input_background || 'var(--primary-background-color, #2b2b2b)'};
-                    border: 1px solid ${this._config.date_input_border || 'var(--divider-color, #3b3b3b)'};
-                    color: ${this._config.date_input_text || 'var(--primary-text-color, #e1e1e1)'};
-                    padding: ${this._config.date_input_padding || '4px 8px'};
-                    border-radius: ${this._config.date_input_radius || '4px'};
+                background: ${this._config.date_input_background_color || this._config.date_input_background || 'var(--primary-background-color, #2b2b2b)'};
+                border: 1px solid ${this._config.date_input_border_color || this._config.date_input_border || 'var(--divider-color, #3b3b3b)'};
+                color: ${this._config.date_input_text_color || this._config.date_input_text || 'var(--primary-text-color, #e1e1e1)'};
+                padding: ${this._config.date_input_padding || '4px 8px'};
+                border-radius: ${this._config.date_input_radius || '4px'};
                     margin-left: 6px;
-                    font-size: ${this._config.date_input_size || '13px'};
-                    accent-color: ${this._config.date_input_accent || 'var(--primary-color, #03a9f4)'};
-                    color-scheme: ${this._config.date_input_scheme || 'dark'};
-                    caret-color: ${this._config.date_input_caret || this._config.date_input_text || 'var(--primary-text-color, #e1e1e1)'};
+                font-size: ${this._config.date_input_size || '13px'};
+                accent-color: ${this._config.date_input_accent_color || this._config.date_input_accent || 'var(--primary-color, #03a9f4)'};
+                color-scheme: ${this._config.date_input_scheme || 'dark'};
+                caret-color: ${this._config.date_input_caret_color || this._config.date_input_caret || this._config.date_input_text_color || this._config.date_input_text || 'var(--primary-text-color, #e1e1e1)'};
         }
                 .custom-range input:focus {
                     outline: none;
-                    box-shadow: 0 0 0 2px ${this._config.date_input_focus || 'rgba(3,169,244,0.4)'};
+                    box-shadow: 0 0 0 2px ${this._config.date_input_focus_color || this._config.date_input_focus || 'rgba(3,169,244,0.4)'};
                 }
                 .custom-range input::-webkit-calendar-picker-indicator {
                     filter: ${this._config.date_picker_icon_filter || 'invert(0.9)'};
                     opacity: ${this._config.date_picker_icon_opacity || '0.8'};
                 }
                 .custom-range input::-webkit-datetime-edit {
-                    color: ${this._config.date_input_text || 'var(--primary-text-color, #e1e1e1)'};
+                    color: ${this._config.date_input_text_color || this._config.date_input_text || 'var(--primary-text-color, #e1e1e1)'};
                 }
                 .custom-range input::-webkit-datetime-edit-fields-wrapper {
-                    background: ${this._config.date_input_field_background || 'transparent'};
+                    background: ${this._config.date_input_field_background_color || this._config.date_input_field_background || 'transparent'};
                 }
                 .custom-range input::-webkit-datetime-edit-text,
                 .custom-range input::-webkit-datetime-edit-month-field,
@@ -187,7 +187,7 @@ class TimescalePlotlyCard extends HTMLElement {
                 .custom-range input::-webkit-datetime-edit-hour-field,
                 .custom-range input::-webkit-datetime-edit-minute-field,
                 .custom-range input::-webkit-datetime-edit-ampm-field {
-                    color: ${this._config.date_input_text || 'var(--primary-text-color, #e1e1e1)'};
+                    color: ${this._config.date_input_text_color || this._config.date_input_text || 'var(--primary-text-color, #e1e1e1)'};
                 }
         #apply-custom {
                     padding: ${this._config.apply_button_padding || '6px 16px'};
@@ -509,6 +509,33 @@ class TimescalePlotlyCard extends HTMLElement {
                 }
             });
 
+            const applyModebarStyles = () => {
+                const modebar = chartEl.querySelector('.modebar');
+                const modebarContainer = chartEl.querySelector('.modebar-container');
+                const modebarBg = this._config.modebar_bg_color || this._config.modebar_bgcolor || this._config.modebar_bg || 'rgba(255,255,255,0.9)';
+
+                if (modebarContainer) {
+                    modebarContainer.style.position = 'absolute';
+                    modebarContainer.style.top = '-12px';
+                    modebarContainer.style.right = '10px';
+                    modebarContainer.style.left = 'auto';
+                    modebarContainer.style.background = 'transparent';
+                    modebarContainer.style.width = 'fit-content';
+                    modebarContainer.style.padding = '0';
+                    modebarContainer.style.boxShadow = 'none';
+                    modebarContainer.style.zIndex = '10001';
+                }
+
+                if (modebar) {
+                    modebar.style.position = 'relative';
+                    modebar.style.background = modebarBg;
+                    modebar.style.backgroundColor = modebarBg;
+                    modebar.style.borderRadius = this._config.modebar_radius || '4px';
+                    modebar.style.padding = '6px';
+                    modebar.style.boxShadow = '0 2px 4px rgba(0,0,0,0.2)';
+                }
+            };
+
             // Custom tooltip using Plotly hover events
             let tooltip = chartEl.querySelector('.chart-tooltip');
             if (!tooltip) {
@@ -665,21 +692,9 @@ class TimescalePlotlyCard extends HTMLElement {
             overlay.addEventListener('mousemove', this._mouseMoveHandler);
             overlay.addEventListener('mouseleave', this._mouseLeaveHandler);
 
-            // Force modebar position after Plotly renders
-            setTimeout(() => {
-                const modebar = chartEl.querySelector('.modebar');
-                if (modebar) {
-                    modebar.style.position = 'absolute';
-                    modebar.style.top = '-12px';
-                    modebar.style.right = '10px';
-                    modebar.style.zIndex = '10001';
-                    const modebarBg = this._config.modebar_bg_color || this._config.modebar_bgcolor || this._config.modebar_bg || 'rgba(255,255,255,0.9)';
-                    modebar.style.background = modebarBg;
-                    modebar.style.backgroundColor = modebarBg;
-                    modebar.style.borderRadius = this._config.modebar_radius || '4px';
-                    modebar.style.padding = '6px';
-                }
-            }, 100);
+            applyModebarStyles();
+            chartEl.on('plotly_afterplot', applyModebarStyles);
+            chartEl.on('plotly_relayout', applyModebarStyles);
 
         } catch (error) {
             statusEl.textContent = 'Error: ' + error.message;
