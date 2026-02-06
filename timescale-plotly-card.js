@@ -393,12 +393,42 @@ class TimescalePlotlyCard extends HTMLElement {
                 return;
             }
 
-            const x = response.map(d => new Date(d.bucket || d.time));
             const treatNaNAsZero = this._config.nan_as_zero === true;
-            const y = response.map(d => {
+            const gapDropToZero = this._config.gap_drop_to_zero === true;
+            const downsampleMs = Math.max(1, Number(downsample) * 1000);
+            const times = response
+                .map(d => new Date(d.bucket || d.time || 0).getTime())
+                .filter(t => Number.isFinite(t))
+                .sort((a, b) => a - b);
+            const offset = times.length ? (times[0] % downsampleMs) : 0;
+
+            const alignTime = (t) => {
+                return Math.round((t - offset) / downsampleMs) * downsampleMs + offset;
+            };
+
+            const dataByTime = new Map();
+            response.forEach(d => {
+                const t = new Date(d.bucket || d.time || 0).getTime();
+                if (!Number.isFinite(t)) return;
+                const key = alignTime(t);
                 const raw = parseFloat(d.avg_state || d.state);
-                return Number.isFinite(raw) ? raw : (treatNaNAsZero ? 0 : NaN);
+                dataByTime.set(key, Number.isFinite(raw) ? raw : null);
             });
+
+            const startMs = alignTime(startTime.getTime());
+            const endMs = alignTime(endTime.getTime());
+            const xBase = [];
+            const yBase = [];
+
+            for (let t = startMs; t <= endMs; t += downsampleMs) {
+                xBase.push(new Date(t));
+                const raw = dataByTime.get(t);
+                if (Number.isFinite(raw)) {
+                    yBase.push(raw);
+                } else {
+                    yBase.push(null);
+                }
+            }
 
             const stateObj = this._hass?.states?.[this._config.sensor_id];
             const unitFromState = stateObj?.attributes?.unit_of_measurement || '';
@@ -417,10 +447,91 @@ class TimescalePlotlyCard extends HTMLElement {
                 || sensorIdShort
                 || sensorId
                 || 'Value';
+            const formatValue = (val) => (Number.isFinite(val) ? Number(val).toFixed(2) : '—');
+
+            let x = xBase;
+            let y = yBase;
+
+            if (treatNaNAsZero && gapDropToZero) {
+                const gapDropMinPoints = Math.max(1, Number(this._config.gap_drop_min_points ?? 2));
+                const plotX = [];
+                const plotY = [];
+                const plotText = [];
+
+                const pushPoint = (time, value) => {
+                    plotX.push(time);
+                    plotY.push(value);
+                    const formatted = new Date(time).toLocaleString('nl-NL', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+                    plotText.push(`${formatted}<br>${labelText}: ${formatValue(value)}${unitSuffix}`);
+                };
+
+                let lastFinite = null;
+                let i = 0;
+                while (i < xBase.length) {
+                    const time = xBase[i];
+                    const val = yBase[i];
+
+                    if (Number.isFinite(val)) {
+                        pushPoint(time, val);
+                        lastFinite = val;
+                        i += 1;
+                        continue;
+                    }
+
+                    let j = i;
+                    while (j < xBase.length && !Number.isFinite(yBase[j])) j += 1;
+                    const gapLen = j - i;
+
+                    if (gapLen < gapDropMinPoints) {
+                        const fillVal = Number.isFinite(lastFinite) ? lastFinite : 0;
+                        for (let k = i; k < j; k += 1) {
+                            pushPoint(xBase[k], fillVal);
+                        }
+                        i = j;
+                        continue;
+                    }
+
+                    const dropTime = xBase[i];
+                    if (Number.isFinite(lastFinite)) {
+                        pushPoint(dropTime, lastFinite);
+                        pushPoint(dropTime, 0);
+                    } else {
+                        pushPoint(dropTime, 0);
+                    }
+
+                    pushPoint(xBase[j - 1], 0);
+
+                    if (j < xBase.length && Number.isFinite(yBase[j])) {
+                        pushPoint(xBase[j], 0);
+                        pushPoint(xBase[j], yBase[j]);
+                        lastFinite = yBase[j];
+                        i = j + 1;
+                    } else {
+                        i = j;
+                    }
+                }
+
+                x = plotX;
+                y = plotY;
+                this._plotText = plotText;
+            } else {
+                if (treatNaNAsZero) {
+                    y = yBase.map(v => (Number.isFinite(v) ? v : 0));
+                }
+                this._plotText = x.map((time, i) => {
+                    const formatted = new Date(time).toLocaleString('nl-NL', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+                    return `${formatted}<br>${labelText}: ${formatValue(y[i])}${unitSuffix}`;
+                });
+            }
 
             // Calculate automatic Y-axis range with margin
-            const minValue = Math.min(...y);
-            const maxValue = Math.max(...y);
+            const finiteY = y.filter(v => Number.isFinite(v));
+            if (finiteY.length === 0) {
+                statusEl.textContent = 'No valid data';
+                return;
+            }
+            const minValue = Math.min(...finiteY);
+            const maxValue = Math.max(...finiteY);
             const margin = Number.isFinite(Number(this._config.y_margin)) ? Number(this._config.y_margin) : 5;  // Default 5 units margin
             const yMin = (minValue >= 0 && minValue <= margin) ? 0 : (minValue - margin);
             const yMax = maxValue + margin;
@@ -442,7 +553,8 @@ class TimescalePlotlyCard extends HTMLElement {
                 mode: 'lines+markers',
                 line: {
                     color: this._config.line_color || this._config.color || 'rgb(75,192,192)',
-                    width: this._config.line_width || 2
+                    width: this._config.line_width || 2,
+                    shape: this._config.line_shape || 'linear'
                 },
                 marker: {
                     size: 6,
@@ -451,10 +563,10 @@ class TimescalePlotlyCard extends HTMLElement {
                 },
                 fill: 'tozeroy',
                 fillcolor: this._config.fill_color || this._config.fillcolor || 'rgba(75,192,192,0.2)',
-                text: x.map((time, i) => {
+                text: this._plotText || x.map((time, i) => {
                     const date = new Date(time);
                     const formatted = date.toLocaleString('nl-NL', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
-                    return `${formatted}<br>${labelText}: ${y[i].toFixed(2)}${unitSuffix}`;
+                    return `${formatted}<br>${labelText}: ${formatValue(y[i])}${unitSuffix}`;
                 }),
                 hoverinfo: 'text',
                 name: ''
@@ -568,12 +680,12 @@ class TimescalePlotlyCard extends HTMLElement {
             }
 
             chartEl.on('plotly_hover', (eventData) => {
-                const point = eventData.points && eventData.points[0];
+                const point = eventData?.points && eventData.points[0];
                 if (!point) return;
 
                 const unitLabel = labelText;
                 const unitSuffix = unitSuffixValue ? ` ${unitSuffixValue}` : '';
-                const date = new Date(point.x);
+                const date = new Date(point.x || 0);
                 const formatted = date.toLocaleString('nl-NL', {
                     day: '2-digit',
                     month: '2-digit',
@@ -582,7 +694,8 @@ class TimescalePlotlyCard extends HTMLElement {
                     minute: '2-digit'
                 });
 
-                tooltip.innerHTML = `<b>${formatted}</b><br>${unitLabel}: <b>${Number(point.y).toFixed(2)}${unitSuffix}</b>`;
+                const pointValue = Number.isFinite(point.y) ? Number(point.y).toFixed(2) : '—';
+                tooltip.innerHTML = `<b>${formatted}</b><br>${unitLabel}: <b>${pointValue}${unitSuffix}</b>`;
                 tooltip.style.display = 'block';
 
                 const rect = chartEl.getBoundingClientRect();
@@ -605,7 +718,7 @@ class TimescalePlotlyCard extends HTMLElement {
                 hoverLine.style.display = 'block';
                 hoverLine.style.left = `${lineX}px`;
 
-                statusEl.textContent = `${formatted} • ${unitLabel}: ${Number(point.y).toFixed(2)}${unitSuffix}`;
+                statusEl.textContent = `${formatted} • ${unitLabel}: ${pointValue}${unitSuffix}`;
             });
 
             chartEl.on('plotly_unhover', () => {
@@ -622,22 +735,29 @@ class TimescalePlotlyCard extends HTMLElement {
                 overlay.removeEventListener('mouseleave', this._mouseLeaveHandler);
             }
 
+            const getTimeSafe = (val) => {
+                if (val instanceof Date) return val.getTime();
+                const t = new Date(val).getTime();
+                return Number.isFinite(t) ? t : 0;
+            };
+
             const findNearestIndex = (targetTime) => {
+                if (!x || x.length === 0) return 0;
                 let lo = 0;
                 let hi = x.length - 1;
                 while (hi - lo > 1) {
                     const mid = Math.floor((lo + hi) / 2);
-                    if (x[mid].getTime() < targetTime) lo = mid;
+                    if (getTimeSafe(x[mid]) < targetTime) lo = mid;
                     else hi = mid;
                 }
-                const loDiff = Math.abs(x[lo].getTime() - targetTime);
-                const hiDiff = Math.abs(x[hi].getTime() - targetTime);
+                const loDiff = Math.abs(getTimeSafe(x[lo]) - targetTime);
+                const hiDiff = Math.abs(getTimeSafe(x[hi]) - targetTime);
                 return loDiff <= hiDiff ? lo : hi;
             };
 
             this._mouseMoveHandler = (evt) => {
                 const layout = chartEl._fullLayout;
-                if (!layout || !layout.xaxis) return;
+                if (!layout || !layout.xaxis || !x || x.length === 0) return;
 
                 const rect = overlay.getBoundingClientRect();
                 const px = evt.clientX - rect.left;
@@ -645,7 +765,8 @@ class TimescalePlotlyCard extends HTMLElement {
 
                 const size = layout._size;
                 const xRange = layout.xaxis.range;
-                if (!size || !xRange || xRange.length < 2) return;
+                if (!size || !Array.isArray(xRange) || xRange.length < 2) return;
+                if (xRange[0] == null || xRange[1] == null) return;
 
                 const xStart = new Date(xRange[0]).getTime();
                 const xEnd = new Date(xRange[1]).getTime();
@@ -657,7 +778,7 @@ class TimescalePlotlyCard extends HTMLElement {
 
                 const unitLabel = labelText;
                 const unitSuffix = unitSuffixValue ? ` ${unitSuffixValue}` : '';
-                const date = new Date(x[nearestIndex]);
+                const date = new Date(x[nearestIndex] || 0);
                 const formatted = date.toLocaleString('nl-NL', {
                     day: '2-digit',
                     month: '2-digit',
@@ -666,7 +787,8 @@ class TimescalePlotlyCard extends HTMLElement {
                     minute: '2-digit'
                 });
 
-                tooltip.innerHTML = `<b>${formatted}</b><br>${unitLabel}: <b>${Number(y[nearestIndex]).toFixed(2)}${unitSuffix}</b>`;
+                const nearestValue = Number.isFinite(y[nearestIndex]) ? Number(y[nearestIndex]).toFixed(2) : '—';
+                tooltip.innerHTML = `<b>${formatted}</b><br>${unitLabel}: <b>${nearestValue}${unitSuffix}</b>`;
                 tooltip.style.display = 'block';
 
                 let xPos = px + 10;
@@ -684,7 +806,7 @@ class TimescalePlotlyCard extends HTMLElement {
                 hoverLine.style.display = 'block';
                 hoverLine.style.left = `${px}px`;
 
-                statusEl.textContent = `${formatted} • ${unitLabel}: ${Number(y[nearestIndex]).toFixed(2)}${unitSuffix}`;
+                statusEl.textContent = `${formatted} • ${unitLabel}: ${nearestValue}${unitSuffix}`;
             };
 
             this._mouseLeaveHandler = () => {
