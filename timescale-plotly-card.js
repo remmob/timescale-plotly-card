@@ -394,7 +394,11 @@ class TimescalePlotlyCard extends HTMLElement {
             }
 
             const x = response.map(d => new Date(d.bucket || d.time));
-            const y = response.map(d => parseFloat(d.avg_state || d.state));
+            const treatNaNAsZero = this._config.nan_as_zero === true;
+            const y = response.map(d => {
+                const raw = parseFloat(d.avg_state || d.state);
+                return Number.isFinite(raw) ? raw : (treatNaNAsZero ? 0 : NaN);
+            });
 
             const stateObj = this._hass?.states?.[this._config.sensor_id];
             const unitFromState = stateObj?.attributes?.unit_of_measurement || '';

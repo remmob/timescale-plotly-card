@@ -13,6 +13,7 @@ default_range: 12h # Start range: 1h, 2h, 3h, 6h, 12h, 24h, custom (default: 24h
 downsample: 300 # Default: 300 seconds (5 minutes)
 height: 400 # Chart height in pixels
 y_margin: 2 # Y-axis margin above and below values (default: 5)
+nan_as_zero: false # Treat NaN values as 0
 
 # Chart styling
 line_color: rgb(75, 192, 192) # Line color

@@ -1,6 +1,6 @@
 {
     "name": "timescale-plotly-card",
-    "version": "1.0.9",
+    "version": "1.0.10",
     "description": "A custom Lovelace card for displaying TimescaleDB data with Plotly charts",
     "main": "timescale-plotly-card.js",
     "scripts": {

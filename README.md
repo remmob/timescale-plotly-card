@@ -127,6 +127,7 @@ The toolbar in the top-right corner provides:
 | `downsample` | number | auto | Downsample interval in seconds. Auto: ~80 points |
 | `y_margin` | number | `5` | Y-axis margin above/below data values (bottom margin is 0 when min is between 0 and `y_margin`) |
 | `height` | number | `400` | Chart height in pixels |
+| `nan_as_zero` | boolean | `false` | Treat NaN values as 0 in the series |
 
 ### Tooltip & Status Text
 
