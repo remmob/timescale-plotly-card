@@ -546,6 +546,8 @@ class TimescalePlotlyCard extends HTMLElement {
 
             const downloadFormat = String(this._config.download_format || 'png').toLowerCase();
 
+            const connectGaps = this._config.connect_gaps === true;
+
             await Plotly.newPlot(chartEl, [{
                 x: x,
                 y: y,
@@ -569,6 +571,7 @@ class TimescalePlotlyCard extends HTMLElement {
                     return `${formatted}<br>${labelText}: ${formatValue(y[i])}${unitSuffix}`;
                 }),
                 hoverinfo: 'text',
+                connectgaps: gapDropToZero ? false : connectGaps,
                 name: ''
             }], {
                 width: chartWidth,
