@@ -14,7 +14,7 @@
  * - Interactive Plotly toolbar (zoom, pan, download)
  * 
  * @version 2.0.0
- * @author Your Name
+ * @author Mischa Bommer
  * @license MIT
  */
 
@@ -217,7 +217,8 @@ class TimescalePlotlyCard extends HTMLElement {
                     overflow: visible;
                 }
         /* Plotly modebar styling - toolbar with chart controls */
-                #chart .modebar {
+            #chart .modebar,
+            #chart .modebar-container {
           position: absolute !important;
                     top: -12px !important;
           right: 10px !important;
@@ -226,6 +227,7 @@ class TimescalePlotlyCard extends HTMLElement {
           flex-direction: row !important;
           gap: 8px !important;
           background: ${this._config.modebar_bg_color || this._config.modebar_bgcolor || this._config.modebar_bg || 'rgba(255,255,255,0.9)'} !important;
+          background-color: ${this._config.modebar_bg_color || this._config.modebar_bgcolor || this._config.modebar_bg || 'rgba(255,255,255,0.9)'} !important;
           border-radius: ${this._config.modebar_radius || '4px'} !important;
           padding: 6px !important;
           box-shadow: 0 2px 4px rgba(0,0,0,0.2) !important;
@@ -396,8 +398,8 @@ class TimescalePlotlyCard extends HTMLElement {
             // Calculate automatic Y-axis range with margin
             const minValue = Math.min(...y);
             const maxValue = Math.max(...y);
-            const margin = this._config.y_margin || 5;  // Default 5 units margin
-            const yMin = minValue >= 0 ? minValue : (minValue - margin);
+            const margin = Number.isFinite(Number(this._config.y_margin)) ? Number(this._config.y_margin) : 5;  // Default 5 units margin
+            const yMin = (minValue >= 0 && minValue <= margin) ? 0 : (minValue - margin);
             const yMax = maxValue + margin;
 
             statusEl.textContent = `${response.length} points (${downsample}s interval)`;

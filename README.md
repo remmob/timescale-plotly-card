@@ -5,7 +5,7 @@
  > **Note:**  <span style="font-size: 2em">⚠️</span> This card is under heavy development. Features and options may change frequently.
 
 
-A custom Lovelace card for Home Assistant that displays TimescaleDB historical data using interactive Plotly charts.
+A custom Lovelace card for Home Assistant that displays Timescale database historical data using interactive Plotly charts.
 
 ## Features
 
@@ -100,7 +100,6 @@ The toolbar in the top-right corner provides:
 2. Verify time range has data
 3. Check Home Assistant logs for websocket errors
 
-
 ## Credits
 
 - Built with [Plotly.js](https://plotly.com/javascript/)
@@ -126,7 +125,7 @@ The toolbar in the top-right corner provides:
 | Option | Type | Default | Description |
 |--------|------|---------|-------------|
 | `downsample` | number | auto | Downsample interval in seconds. Auto: ~80 points |
-| `y_margin` | number | `5` | Y-axis margin above/below data values |
+| `y_margin` | number | `5` | Y-axis margin above/below data values (bottom margin is 0 when min is between 0 and `y_margin`) |
 | `height` | number | `400` | Chart height in pixels |
 
 ### Chart Styling
@@ -261,7 +260,7 @@ The toolbar in the top-right corner provides:
 | Option | Type | Default | Description |
 |--------|------|---------|-------------|
 | `show_modebar` | boolean | `true` | Show Plotly modebar |
-| `modebar_bg_color` | string | `rgba(255,255,255,0.9)` | Modebar background |
+| `modebar_bg_color` | string | `rgba(255,255,255,0.9)` | Modebar background (aliases: `modebar_bgcolor`, `modebar_bg`) |
 | `modebar_radius` | string | `4px` | Modebar border radius |
 
 ## Complete Example
