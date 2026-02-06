@@ -216,23 +216,30 @@ class TimescalePlotlyCard extends HTMLElement {
                     position: relative;
                     overflow: visible;
                 }
-        /* Plotly modebar styling - toolbar with chart controls */
-            #chart .modebar,
-            #chart .modebar-container {
-          position: absolute !important;
-                    top: -12px !important;
-          right: 10px !important;
-          left: auto !important;
-          display: flex !important;
-          flex-direction: row !important;
-          gap: 8px !important;
-          background: ${this._config.modebar_bg_color || this._config.modebar_bgcolor || this._config.modebar_bg || 'rgba(255,255,255,0.9)'} !important;
-          background-color: ${this._config.modebar_bg_color || this._config.modebar_bgcolor || this._config.modebar_bg || 'rgba(255,255,255,0.9)'} !important;
-          border-radius: ${this._config.modebar_radius || '4px'} !important;
-          padding: 6px !important;
-          box-shadow: 0 2px 4px rgba(0,0,0,0.2) !important;
-          z-index: 10000 !important;
-        }
+                /* Plotly modebar styling - toolbar with chart controls */
+                        #chart .modebar-container {
+                    position: absolute !important;
+                                        top: -12px !important;
+                    right: 10px !important;
+                    left: auto !important;
+                    display: block !important;
+                    background: transparent !important;
+                    width: auto !important;
+                    padding: 0 !important;
+                    box-shadow: none !important;
+                    z-index: 10000 !important;
+                }
+                        #chart .modebar {
+                    position: relative !important;
+                    display: flex !important;
+                    flex-direction: row !important;
+                    gap: 8px !important;
+                    background: ${this._config.modebar_bg_color || this._config.modebar_bgcolor || this._config.modebar_bg || 'rgba(255,255,255,0.9)'} !important;
+                    background-color: ${this._config.modebar_bg_color || this._config.modebar_bgcolor || this._config.modebar_bg || 'rgba(255,255,255,0.9)'} !important;
+                    border-radius: ${this._config.modebar_radius || '4px'} !important;
+                    padding: 6px !important;
+                    box-shadow: 0 2px 4px rgba(0,0,0,0.2) !important;
+                }
         #chart .modebar-group {
           display: flex !important;
           flex-direction: row !important;
@@ -393,7 +400,11 @@ class TimescalePlotlyCard extends HTMLElement {
             const unitFromState = stateObj?.attributes?.unit_of_measurement || '';
             const unitSuffixValue = this._config.unit ?? unitFromState;
             const unitSuffix = unitSuffixValue ? ` ${unitSuffixValue}` : '';
-            const labelText = this._config.yaxis_title || stateObj?.attributes?.friendly_name || 'Value';
+            const friendlyName = stateObj?.attributes?.friendly_name;
+            const configuredLabel = this._config.yaxis_title;
+            const labelText = configuredLabel && configuredLabel !== this._config.sensor_id
+                ? configuredLabel
+                : (friendlyName || configuredLabel || this._config.sensor_id || 'Value');
 
             // Calculate automatic Y-axis range with margin
             const minValue = Math.min(...y);
@@ -684,5 +695,5 @@ window.customCards = window.customCards || [];
 window.customCards.push({
     type: 'timescale-plotly-card',
     name: 'TimescaleDB Plotly Card',
-    description: 'Plotly grafiek met TimescaleDB data'
+    description: 'Plotly grafiek met Timescale database data'
 });
