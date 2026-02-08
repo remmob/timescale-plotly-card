@@ -36,11 +36,12 @@ class TimescalePlotlyCard extends HTMLElement {
      * Set and validate card configuration
      * 
      * @param {Object} config - Card configuration from YAML
-     * @throws {Error} If sensor_id is missing
+     * @throws {Error} If sensor_id and entities are missing
      */
     setConfig(config) {
-        if (!config.sensor_id) {
-            throw new Error('sensor_id is required');
+        const hasEntities = Array.isArray(config.entities) && config.entities.length > 0;
+        if (!config.sensor_id && !hasEntities) {
+            throw new Error('sensor_id or entities is required');
         }
         this._config = config;
         this._selectedRange = config.default_range || '24h';
@@ -87,22 +88,36 @@ class TimescalePlotlyCard extends HTMLElement {
 
     render() {
         const showTimeSelector = this._config.show_time_selector !== false;
+        const defaultRanges = ['1h', '2h', '3h', '6h', '12h', '24h', 'custom'];
+        const configuredRanges = Array.isArray(this._config.time_ranges) && this._config.time_ranges.length
+            ? this._config.time_ranges
+            : defaultRanges;
+        const ranges = configuredRanges
+            .map(r => String(r).toLowerCase())
+            .filter(r => r && r !== 'nan');
+        if (this._config.show_custom_button === false) {
+            const idx = ranges.indexOf('custom');
+            if (idx >= 0) ranges.splice(idx, 1);
+        }
+        if (!ranges.includes(this._selectedRange)) {
+            ranges.push(this._selectedRange);
+        }
+        const showCustom = ranges.includes('custom');
+        const timeButtonsHTML = ranges.map(range => {
+            const label = range === 'custom' ? 'Custom' : range;
+            return `<button class="time-btn ${this._selectedRange === range ? 'active' : ''}" data-range="${range}">${label}</button>`;
+        }).join('');
+
         const timeSelectorHTML = showTimeSelector ? `
-          <div class="time-selector">
-            <button class="time-btn ${this._selectedRange === '1h' ? 'active' : ''}" data-range="1h">1h</button>
-            <button class="time-btn ${this._selectedRange === '2h' ? 'active' : ''}" data-range="2h">2h</button>
-            <button class="time-btn ${this._selectedRange === '3h' ? 'active' : ''}" data-range="3h">3h</button>
-            <button class="time-btn ${this._selectedRange === '6h' ? 'active' : ''}" data-range="6h">6h</button>
-            <button class="time-btn ${this._selectedRange === '12h' ? 'active' : ''}" data-range="12h">12h</button>
-            <button class="time-btn ${this._selectedRange === '24h' ? 'active' : ''}" data-range="24h">24h</button>
-            <button class="time-btn ${this._selectedRange === 'custom' ? 'active' : ''}" data-range="custom">Custom</button>
-          </div>
-          <div class="custom-range ${this._selectedRange === 'custom' ? 'visible' : ''}">
-            <label>Start: <input type="datetime-local" id="start-date" /></label>
-            <label>End: <input type="datetime-local" id="end-date" /></label>
-            <button id="apply-custom">Apply</button>
-          </div>
-        ` : '';
+                    <div class="time-selector">
+                        ${timeButtonsHTML}
+                    </div>
+                    <div class="custom-range ${(this._selectedRange === 'custom' && showCustom) ? 'visible' : ''}">
+                        <label>Start: <input type="datetime-local" id="start-date" /></label>
+                        <label>End: <input type="datetime-local" id="end-date" /></label>
+                        <button id="apply-custom">Apply</button>
+                    </div>
+                ` : '';
 
         this.innerHTML = `
       <style>
@@ -209,6 +224,57 @@ class TimescalePlotlyCard extends HTMLElement {
                     padding: ${this._config.status_text_padding || '8px 16px'};
                     font-weight: ${this._config.status_text_weight || 'normal'};
                 }
+                #axis-titles {
+                    display: none;
+                    align-items: center;
+                    justify-content: space-between;
+                    padding: 0 16px 0 16px;
+                    color: ${this._config.font_color || 'var(--primary-text-color, #e1e1e1)'};
+                    font-size: 12px;
+                    font-weight: 600;
+                }
+                #axis-titles.visible {
+                    display: flex;
+                }
+                #axis-title-left,
+                #axis-title-right {
+                    position: relative;
+                    top: ${this._config.axis_title_offset_y || '-18px'};
+                }
+                #axis-title-left {
+                    left: ${this._config.axis_title_offset_left || '0px'};
+                }
+                #axis-title-right {
+                    right: ${this._config.axis_title_offset_right || '0px'};
+                }
+                #legend {
+                    display: none;
+                    gap: 12px;
+                    flex-wrap: wrap;
+                    padding: 0 16px 6px 16px;
+                    color: ${this._config.font_color || 'var(--primary-text-color, #e1e1e1)'};
+                    font-size: 12px;
+                }
+                #legend.visible {
+                    display: flex;
+                }
+                .legend-item {
+                    display: flex;
+                    align-items: center;
+                    gap: 6px;
+                    white-space: nowrap;
+                    cursor: pointer;
+                    user-select: none;
+                }
+                .legend-item.inactive {
+                    opacity: 0.4;
+                }
+                .legend-swatch {
+                    width: 12px;
+                    height: 3px;
+                    border-radius: 2px;
+                    background: currentColor;
+                }
                 #chart {
                     width: 100%;
                     max-width: 100%;
@@ -284,7 +350,7 @@ class TimescalePlotlyCard extends HTMLElement {
                     position: absolute;
                     inset: 0;
                     background: transparent;
-                    z-index: 9999;
+                    z-index: 10005;
                     pointer-events: auto;
                 }
                 .hover-line {
@@ -294,7 +360,7 @@ class TimescalePlotlyCard extends HTMLElement {
                     width: 0;
                     border-left: 1px dotted ${this._config.hover_line_color || 'rgba(120,120,120,0.8)'};
                     display: none;
-                    z-index: 10000;
+                    z-index: 10006;
                     pointer-events: none;
                 }
       </style>
@@ -303,6 +369,8 @@ class TimescalePlotlyCard extends HTMLElement {
         <div class="card-content timescale-content">
           ${timeSelectorHTML}
           <div id="status">Loading data...</div>
+                    <div id="axis-titles"><span id="axis-title-left"></span><span id="axis-title-right"></span></div>
+                    <div id="legend"></div>
                     <div id="chart"></div>
         </div>
       </ha-card>
@@ -347,11 +415,21 @@ class TimescalePlotlyCard extends HTMLElement {
     async loadData() {
         const chartEl = this.querySelector('#chart');
         const statusEl = this.querySelector('#status');
+        const legendEl = this.querySelector('#legend');
+        const axisTitlesEl = this.querySelector('#axis-titles');
+        const axisTitleLeftEl = this.querySelector('#axis-title-left');
+        const axisTitleRightEl = this.querySelector('#axis-title-right');
         if (!chartEl || !this._hass) return;
 
         try {
+            const showStatusText = this._config.show_status_text !== false;
+            if (statusEl) {
+                statusEl.style.display = showStatusText ? '' : 'none';
+            }
             if (!window.Plotly) {
-                statusEl.textContent = 'Loading Plotly...';
+                if (showStatusText) {
+                    statusEl.textContent = 'Loading Plotly...';
+                }
                 await this.loadPlotly();
             }
 
@@ -378,166 +456,236 @@ class TimescalePlotlyCard extends HTMLElement {
                 }
             }
 
-            statusEl.textContent = 'Fetching data...';
+            if (showStatusText) {
+                statusEl.textContent = 'Fetching data...';
+            }
 
-            const response = await this._hass.connection.sendMessagePromise({
-                type: 'timescale/query',
-                sensor_id: this._config.sensor_id,
-                start: startTime.toISOString(),
-                end: endTime.toISOString(),
-                downsample: downsample
-            });
+            const seriesConfigs = Array.isArray(this._config.entities) && this._config.entities.length
+                ? this._config.entities
+                : [{ sensor_id: this._config.sensor_id }];
 
-            if (!response || response.length === 0) {
-                statusEl.textContent = 'No data found';
+            const invalidSeries = seriesConfigs.find(series => !series?.sensor_id);
+            if (invalidSeries) {
+                throw new Error('Each entry in entities must include sensor_id');
+            }
+
+            const responses = await Promise.all(seriesConfigs.map(series => {
+                const msg = {
+                    type: 'timescale/query',
+                    sensor_id: series.sensor_id,
+                    start: startTime.toISOString(),
+                    end: endTime.toISOString(),
+                    downsample: downsample
+                };
+                if (series.entry_id || this._config.entry_id) {
+                    msg.entry_id = series.entry_id || this._config.entry_id;
+                }
+                if (series.database || this._config.database) {
+                    msg.database = series.database || this._config.database;
+                }
+                return this._hass.connection.sendMessagePromise(msg);
+            }));
+
+            const totalPoints = responses.reduce((sum, resp) => sum + (Array.isArray(resp) ? resp.length : 0), 0);
+            if (totalPoints === 0) {
+                if (showStatusText) {
+                    statusEl.textContent = 'No data found';
+                }
                 return;
             }
 
             const treatNaNAsZero = this._config.nan_as_zero === true;
             const gapDropToZero = this._config.gap_drop_to_zero === true;
             const downsampleMs = Math.max(1, Number(downsample) * 1000);
-            const times = response
+
+            const allTimes = responses
+                .flatMap(resp => (Array.isArray(resp) ? resp : []))
                 .map(d => new Date(d.bucket || d.time || 0).getTime())
-                .filter(t => Number.isFinite(t))
-                .sort((a, b) => a - b);
-            const offset = times.length ? (times[0] % downsampleMs) : 0;
+                .filter(t => Number.isFinite(t));
+            const offset = allTimes.length ? (Math.min(...allTimes) % downsampleMs) : (startTime.getTime() % downsampleMs);
 
-            const alignTime = (t) => {
-                return Math.round((t - offset) / downsampleMs) * downsampleMs + offset;
-            };
-
-            const dataByTime = new Map();
-            response.forEach(d => {
-                const t = new Date(d.bucket || d.time || 0).getTime();
-                if (!Number.isFinite(t)) return;
-                const key = alignTime(t);
-                const raw = parseFloat(d.avg_state || d.state);
-                dataByTime.set(key, Number.isFinite(raw) ? raw : null);
-            });
+            const alignTime = (t) => Math.round((t - offset) / downsampleMs) * downsampleMs + offset;
 
             const startMs = alignTime(startTime.getTime());
             const endMs = alignTime(endTime.getTime());
             const xBase = [];
-            const yBase = [];
-
             for (let t = startMs; t <= endMs; t += downsampleMs) {
                 xBase.push(new Date(t));
-                const raw = dataByTime.get(t);
-                if (Number.isFinite(raw)) {
-                    yBase.push(raw);
-                } else {
-                    yBase.push(null);
-                }
             }
 
-            const stateObj = this._hass?.states?.[this._config.sensor_id];
-            const unitFromState = stateObj?.attributes?.unit_of_measurement || '';
-            const unitSuffixValue = this._config.unit ?? unitFromState;
-            const unitSuffix = unitSuffixValue ? ` ${unitSuffixValue}` : '';
-            const friendlyName = stateObj?.attributes?.friendly_name;
-            const configuredLabel = this._config.yaxis_title;
-            const valueLabel = this._config.tooltip_label_text;
-            const sensorId = this._config.sensor_id;
-            const sensorIdShort = sensorId ? sensorId.split('.').pop() : undefined;
-            const configuredIsId = configuredLabel && (configuredLabel === sensorId || configuredLabel === sensorIdShort);
-            const labelText = valueLabel
-                || (configuredLabel && !configuredIsId ? configuredLabel : undefined)
-                || friendlyName
-                || configuredLabel
-                || sensorIdShort
-                || sensorId
-                || 'Value';
-            const formatValue = (val) => (Number.isFinite(val) ? Number(val).toFixed(2) : '—');
+            const defaultColors = [
+                'rgb(75,192,192)',
+                'rgb(255,99,132)',
+                'rgb(54,162,235)',
+                'rgb(255,159,64)',
+                'rgb(153,102,255)',
+                'rgb(201,203,207)'
+            ];
 
-            let x = xBase;
-            let y = yBase;
+            const buildSeries = (seriesConfig, response, index) => {
+                const sensorId = seriesConfig.sensor_id;
+                const stateObj = this._hass?.states?.[sensorId];
+                const unitFromState = stateObj?.attributes?.unit_of_measurement || '';
+                const unitValue = seriesConfig.unit ?? this._config.unit ?? unitFromState;
+                const unitSuffix = unitValue ? ` ${unitValue}` : '';
 
-            if (treatNaNAsZero && gapDropToZero) {
-                const gapDropMinPoints = Math.max(1, Number(this._config.gap_drop_min_points ?? 2));
-                const plotX = [];
-                const plotY = [];
-                const plotText = [];
+                const sensorIdShort = sensorId ? sensorId.split('.').pop() : undefined;
+                const friendlyName = stateObj?.attributes?.friendly_name;
+                const seriesName = seriesConfig.name || friendlyName || sensorIdShort || sensorId || `Series ${index + 1}`;
+                const valueLabel = seriesConfig.tooltip_label_text ?? this._config.tooltip_label_text;
+                const labelText = valueLabel || seriesName || 'Value';
+                const formatValue = (val) => (Number.isFinite(val) ? Number(val).toFixed(2) : '—');
 
-                const pushPoint = (time, value) => {
-                    plotX.push(time);
-                    plotY.push(value);
-                    const formatted = new Date(time).toLocaleString('nl-NL', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
-                    plotText.push(`${formatted}<br>${labelText}: ${formatValue(value)}${unitSuffix}`);
-                };
-
-                let lastFinite = null;
-                let i = 0;
-                while (i < xBase.length) {
-                    const time = xBase[i];
-                    const val = yBase[i];
-
-                    if (Number.isFinite(val)) {
-                        pushPoint(time, val);
-                        lastFinite = val;
-                        i += 1;
-                        continue;
-                    }
-
-                    let j = i;
-                    while (j < xBase.length && !Number.isFinite(yBase[j])) j += 1;
-                    const gapLen = j - i;
-
-                    if (gapLen < gapDropMinPoints) {
-                        const fillVal = Number.isFinite(lastFinite) ? lastFinite : 0;
-                        for (let k = i; k < j; k += 1) {
-                            pushPoint(xBase[k], fillVal);
-                        }
-                        i = j;
-                        continue;
-                    }
-
-                    const dropTime = xBase[i];
-                    if (Number.isFinite(lastFinite)) {
-                        pushPoint(dropTime, lastFinite);
-                        pushPoint(dropTime, 0);
-                    } else {
-                        pushPoint(dropTime, 0);
-                    }
-
-                    pushPoint(xBase[j - 1], 0);
-
-                    if (j < xBase.length && Number.isFinite(yBase[j])) {
-                        pushPoint(xBase[j], 0);
-                        pushPoint(xBase[j], yBase[j]);
-                        lastFinite = yBase[j];
-                        i = j + 1;
-                    } else {
-                        i = j;
-                    }
-                }
-
-                x = plotX;
-                y = plotY;
-                this._plotText = plotText;
-            } else {
-                if (treatNaNAsZero) {
-                    y = yBase.map(v => (Number.isFinite(v) ? v : 0));
-                }
-                this._plotText = x.map((time, i) => {
-                    const formatted = new Date(time).toLocaleString('nl-NL', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
-                    return `${formatted}<br>${labelText}: ${formatValue(y[i])}${unitSuffix}`;
+                const dataByTime = new Map();
+                (response || []).forEach(d => {
+                    const t = new Date(d.bucket || d.time || 0).getTime();
+                    if (!Number.isFinite(t)) return;
+                    const key = alignTime(t);
+                    const raw = parseFloat(d.avg_state || d.state);
+                    dataByTime.set(key, Number.isFinite(raw) ? raw : null);
                 });
-            }
+
+                const yBase = xBase.map(time => {
+                    const raw = dataByTime.get(time.getTime());
+                    return Number.isFinite(raw) ? raw : null;
+                });
+
+                let x = xBase;
+                let y = yBase;
+                let plotText = [];
+
+                if (treatNaNAsZero && gapDropToZero) {
+                    const gapDropMinPoints = Math.max(1, Number(this._config.gap_drop_min_points ?? 2));
+                    const plotX = [];
+                    const plotY = [];
+                    const plotTextLocal = [];
+
+                    const pushPoint = (time, value) => {
+                        plotX.push(time);
+                        plotY.push(value);
+                        const formatted = new Date(time).toLocaleString('nl-NL', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+                        plotTextLocal.push(`${formatted}<br>${labelText}: ${formatValue(value)}${unitSuffix}`);
+                    };
+
+                    let lastFinite = null;
+                    let i = 0;
+                    while (i < xBase.length) {
+                        const time = xBase[i];
+                        const val = yBase[i];
+
+                        if (Number.isFinite(val)) {
+                            pushPoint(time, val);
+                            lastFinite = val;
+                            i += 1;
+                            continue;
+                        }
+
+                        let j = i;
+                        while (j < xBase.length && !Number.isFinite(yBase[j])) j += 1;
+                        const gapLen = j - i;
+
+                        if (gapLen < gapDropMinPoints) {
+                            const fillVal = Number.isFinite(lastFinite) ? lastFinite : 0;
+                            for (let k = i; k < j; k += 1) {
+                                pushPoint(xBase[k], fillVal);
+                            }
+                            i = j;
+                            continue;
+                        }
+
+                        const dropTime = xBase[i];
+                        if (Number.isFinite(lastFinite)) {
+                            pushPoint(dropTime, lastFinite);
+                            pushPoint(dropTime, 0);
+                        } else {
+                            pushPoint(dropTime, 0);
+                        }
+
+                        pushPoint(xBase[j - 1], 0);
+
+                        if (j < xBase.length && Number.isFinite(yBase[j])) {
+                            pushPoint(xBase[j], 0);
+                            pushPoint(xBase[j], yBase[j]);
+                            lastFinite = yBase[j];
+                            i = j + 1;
+                        } else {
+                            i = j;
+                        }
+                    }
+
+                    x = plotX;
+                    y = plotY;
+                    plotText = plotTextLocal;
+                } else {
+                    if (treatNaNAsZero) {
+                        y = yBase.map(v => (Number.isFinite(v) ? v : 0));
+                    }
+                    plotText = x.map((time, i) => {
+                        const formatted = new Date(time).toLocaleString('nl-NL', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+                        return `${formatted}<br>${labelText}: ${formatValue(y[i])}${unitSuffix}`;
+                    });
+                }
+
+                const lineColor = seriesConfig.line_color || seriesConfig.color || this._config.line_color || this._config.color || defaultColors[index % defaultColors.length];
+                const fillEnabled = seriesConfig.fill !== false && this._config.fill !== false;
+                const fillColor = seriesConfig.fill_color || this._config.fill_color || this._config.fillcolor || 'rgba(75,192,192,0.2)';
+                const lineWidth = seriesConfig.line_width || this._config.line_width || 2;
+                const lineShape = seriesConfig.line_shape || this._config.line_shape || 'linear';
+                const chartType = seriesConfig.type || seriesConfig.chart_type || this._config.chart_type || 'line';
+                const axisSideRaw = (seriesConfig.yaxis || seriesConfig.axis || 'left');
+                const axisSide = String(axisSideRaw).toLowerCase() === 'right' ? 'right' : 'left';
+
+                return {
+                    x,
+                    y,
+                    plotText,
+                    lineColor,
+                    fillColor,
+                    lineWidth,
+                    lineShape,
+                    name: seriesName,
+                    labelText,
+                    unitValue,
+                    fillEnabled,
+                    axisSide,
+                    chartType
+                };
+            };
+
+            const seriesData = seriesConfigs.map((seriesConfig, index) => buildSeries(seriesConfig, responses[index], index));
 
             // Calculate automatic Y-axis range with margin
-            const finiteY = y.filter(v => Number.isFinite(v));
+            const leftSeries = seriesData.filter(series => series.axisSide !== 'right');
+            const rightSeries = seriesData.filter(series => series.axisSide === 'right');
+            const leftYAll = leftSeries.flatMap(series => series.y || []);
+            const rightYAll = rightSeries.flatMap(series => series.y || []);
+            const allY = seriesData.flatMap(series => series.y || []);
+            const finiteY = allY.filter(v => Number.isFinite(v));
             if (finiteY.length === 0) {
-                statusEl.textContent = 'No valid data';
+                if (showStatusText) {
+                    statusEl.textContent = 'No valid data';
+                }
                 return;
             }
-            const minValue = Math.min(...finiteY);
-            const maxValue = Math.max(...finiteY);
             const margin = Number.isFinite(Number(this._config.y_margin)) ? Number(this._config.y_margin) : 5;  // Default 5 units margin
-            const yMin = (minValue >= 0 && minValue <= margin) ? 0 : (minValue - margin);
-            const yMax = maxValue + margin;
+            const getRange = (values) => {
+                const finite = values.filter(v => Number.isFinite(v));
+                if (finite.length === 0) return null;
+                const minValue = Math.min(...finite);
+                const maxValue = Math.max(...finite);
+                const yMin = (minValue >= 0 && minValue <= margin) ? 0 : (minValue - margin);
+                const yMax = maxValue + margin;
+                return { yMin, yMax };
+            };
 
-            statusEl.textContent = `${response.length} points (${downsample}s interval)`;
-            const defaultStatus = statusEl.textContent;
+            const leftRange = getRange(leftYAll.length ? leftYAll : allY);
+            const rightRange = getRange(rightYAll);
+
+            let defaultStatus = '';
+            if (showStatusText) {
+                statusEl.textContent = `${totalPoints} points (${downsample}s interval)`;
+                defaultStatus = statusEl.textContent;
+            }
 
             // Wait for DOM ready and calculate correct width
             await new Promise(resolve => setTimeout(resolve, 50));
@@ -547,38 +695,89 @@ class TimescalePlotlyCard extends HTMLElement {
             const downloadFormat = String(this._config.download_format || 'png').toLowerCase();
 
             const connectGaps = this._config.connect_gaps === true;
+            const showLegend = seriesData.length > 1;
+            const isMultiSeries = seriesData.length > 1;
+            const normalizeTitle = (value) => {
+                if (value === null || value === undefined) return '';
+                const text = String(value).trim();
+                if (!text) return '';
+                if (text.toLowerCase() === 'nan') return '';
+                return text;
+            };
+            const axisTitlePosition = String(this._config.yaxis_title_position || 'top').toLowerCase();
+            const leftAxisTitle = normalizeTitle(this._config.yaxis_title_left)
+                || normalizeTitle(this._config.yaxis_title)
+                || (leftSeries.length === 1 ? normalizeTitle(leftSeries[0]?.unitValue || leftSeries[0]?.name || '') : '');
+            const rightAxisTitle = normalizeTitle(this._config.yaxis_title_right)
+                || (rightSeries.length === 1 ? normalizeTitle(rightSeries[0]?.unitValue || rightSeries[0]?.name || '') : '');
 
-            await Plotly.newPlot(chartEl, [{
-                x: x,
-                y: y,
-                type: 'scatter',
-                mode: 'lines+markers',
-                line: {
-                    color: this._config.line_color || this._config.color || 'rgb(75,192,192)',
-                    width: this._config.line_width || 2,
-                    shape: this._config.line_shape || 'linear'
-                },
-                marker: {
-                    size: 6,
-                    opacity: 0.01,
-                    color: this._config.line_color || this._config.color || 'rgb(75,192,192)'
-                },
-                fill: 'tozeroy',
-                fillcolor: this._config.fill_color || this._config.fillcolor || 'rgba(75,192,192,0.2)',
-                text: this._plotText || x.map((time, i) => {
-                    const date = new Date(time);
-                    const formatted = date.toLocaleString('nl-NL', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
-                    return `${formatted}<br>${labelText}: ${formatValue(y[i])}${unitSuffix}`;
-                }),
-                hoverinfo: 'text',
-                connectgaps: gapDropToZero ? false : connectGaps,
-                name: ''
-            }], {
+            if (axisTitlesEl && axisTitleLeftEl && axisTitleRightEl) {
+                const showTopTitles = axisTitlePosition === 'top' && (leftAxisTitle || rightAxisTitle);
+                axisTitlesEl.classList.toggle('visible', showTopTitles);
+                axisTitleLeftEl.textContent = leftAxisTitle || '';
+                axisTitleRightEl.textContent = rightAxisTitle || '';
+            }
+
+            if (!Array.isArray(this._legendVisibility) || this._legendVisibility.length !== seriesData.length) {
+                this._legendVisibility = seriesData.map((_, idx) => this._legendVisibility?.[idx] ?? true);
+            }
+
+            const traces = seriesData.map((series, index) => {
+                const chartType = String(series.chartType || 'line').toLowerCase();
+                const isBar = chartType === 'bar';
+                return {
+                    x: series.x,
+                    y: series.y,
+                    type: isBar ? 'bar' : 'scatter',
+                    mode: isBar ? undefined : 'lines+markers',
+                    line: isBar ? undefined : {
+                        color: series.lineColor,
+                        width: series.lineWidth,
+                        shape: series.lineShape
+                    },
+                    marker: isBar ? {
+                        color: series.lineColor
+                    } : {
+                        size: 6,
+                        opacity: 0.01,
+                        color: series.lineColor
+                    },
+                    fill: isBar ? 'none' : (series.fillEnabled ? 'tozeroy' : 'none'),
+                    fillcolor: isBar ? 'rgba(0,0,0,0)' : (series.fillEnabled ? series.fillColor : 'rgba(0,0,0,0)'),
+                    text: series.plotText,
+                    hoverinfo: 'text',
+                    hoveron: isBar ? 'points' : 'points',
+                    connectgaps: isBar ? false : (gapDropToZero ? false : connectGaps),
+                    name: series.name,
+                    showlegend: showLegend,
+                    yaxis: series.axisSide === 'right' ? 'y2' : 'y',
+                    visible: this._legendVisibility[index] ? true : false,
+                    meta: {
+                        labelText: series.labelText,
+                        unitValue: series.unitValue
+                    }
+                };
+            });
+
+            const x = seriesData[0]?.x || xBase;
+            const y = seriesData[0]?.y || [];
+            const labelText = seriesData[0]?.labelText || 'Value';
+            const unitSuffixValue = seriesData[0]?.unitValue || '';
+
+            const baseMarginTop = this._config.margin_top || 60;
+            const needsTopTitles = axisTitlePosition === 'top' && (leftAxisTitle || rightAxisTitle);
+            const marginTop = needsTopTitles ? Math.max(baseMarginTop, 80) : baseMarginTop;
+            const baseMarginRight = this._config.margin_right || 60;
+            const marginRight = rightRange ? Math.max(baseMarginRight, 50) : baseMarginRight;
+
+            const annotations = [];
+
+            const layout = {
                 width: chartWidth,
                 height: this._config.height || 400,
                 margin: {
-                    t: this._config.margin_top || 60,
-                    r: this._config.margin_right || 60,
+                    t: marginTop,
+                    r: marginRight,
                     b: this._config.margin_bottom || 40,
                     l: this._config.margin_left || 50
                 },
@@ -591,26 +790,50 @@ class TimescalePlotlyCard extends HTMLElement {
                     automargin: true
                 },
                 yaxis: {
-                    title: { text: this._config.yaxis_title || unitFromState || this._config.unit || '' },
-                    range: [yMin, yMax],
+                    title: {
+                        text: axisTitlePosition === 'top' ? '' : (leftAxisTitle || ''),
+                        font: { color: this._config.font_color || 'var(--primary-text-color, #e1e1e1)' },
+                        standoff: 8
+                    },
+                    range: leftRange ? [leftRange.yMin, leftRange.yMax] : undefined,
                     gridcolor: this._config.grid_color || 'rgba(128,128,128,0.2)',
                     ticklabelpadding: this._config.yaxis_tick_padding || 6,
                     ticklabelstandoff: this._config.yaxis_tick_padding || 6,
                     automargin: true
                 },
+                annotations: annotations,
                 paper_bgcolor: this._config.paper_bgcolor || 'rgba(0,0,0,0)',
                 plot_bgcolor: this._config.plot_bgcolor || 'rgba(0,0,0,0)',
                 font: {
                     color: this._config.font_color || 'var(--primary-text-color, #e1e1e1)'
                 },
-                hovermode: 'closest',
+                hovermode: isMultiSeries ? 'x unified' : 'closest',
                 hoverlabel: {
                     bgcolor: 'rgba(0,0,0,0.9)',
                     font: { color: 'white', size: 14 },
                     bordercolor: this._config.line_color || 'rgb(75,192,192)'
                 },
                 showlegend: false
-            }, {
+            };
+
+            if (rightRange) {
+                layout.yaxis2 = {
+                    title: {
+                        text: axisTitlePosition === 'top' ? '' : (rightAxisTitle || ''),
+                        font: { color: this._config.font_color || 'var(--primary-text-color, #e1e1e1)' },
+                        standoff: 8
+                    },
+                    range: [rightRange.yMin, rightRange.yMax],
+                    overlaying: 'y',
+                    side: 'right',
+                    gridcolor: 'rgba(0,0,0,0)',
+                    ticklabelpadding: this._config.yaxis_tick_padding || 6,
+                    ticklabelstandoff: this._config.yaxis_tick_padding || 6,
+                    automargin: true
+                };
+            }
+
+            await Plotly.newPlot(chartEl, traces, layout, {
                 responsive: false,
                 displayModeBar: this._config.show_modebar !== false,
                 displaylogo: false,
@@ -683,12 +906,11 @@ class TimescalePlotlyCard extends HTMLElement {
             }
 
             chartEl.on('plotly_hover', (eventData) => {
-                const point = eventData?.points && eventData.points[0];
-                if (!point) return;
+                const points = eventData?.points || [];
+                if (!points.length) return;
 
-                const unitLabel = labelText;
-                const unitSuffix = unitSuffixValue ? ` ${unitSuffixValue}` : '';
-                const date = new Date(point.x || 0);
+                const firstPoint = points[0];
+                const date = new Date(firstPoint.x || 0);
                 const formatted = date.toLocaleString('nl-NL', {
                     day: '2-digit',
                     month: '2-digit',
@@ -697,8 +919,15 @@ class TimescalePlotlyCard extends HTMLElement {
                     minute: '2-digit'
                 });
 
-                const pointValue = Number.isFinite(point.y) ? Number(point.y).toFixed(2) : '—';
-                tooltip.innerHTML = `<b>${formatted}</b><br>${unitLabel}: <b>${pointValue}${unitSuffix}</b>`;
+                const lines = points.map((pt) => {
+                    const meta = pt?.data?.meta || {};
+                    const unitLabel = meta.labelText || pt?.data?.name || labelText;
+                    const unitSuffix = meta.unitValue ? ` ${meta.unitValue}` : (unitSuffixValue ? ` ${unitSuffixValue}` : '');
+                    const pointValue = Number.isFinite(pt.y) ? Number(pt.y).toFixed(2) : '—';
+                    return `${unitLabel}: <b>${pointValue}${unitSuffix}</b>`;
+                });
+
+                tooltip.innerHTML = `<b>${formatted}</b><br>${lines.join('<br>')}`;
                 tooltip.style.display = 'block';
 
                 const rect = chartEl.getBoundingClientRect();
@@ -708,8 +937,8 @@ class TimescalePlotlyCard extends HTMLElement {
                 let yPos = clientY - rect.top - 10;
                 const lineX = clientX - rect.left;
 
-                const maxX = rect.width - 160;
-                const maxY = rect.height - 40;
+                const maxX = rect.width - 200;
+                const maxY = rect.height - 60;
                 if (xPos < 0) xPos = 0;
                 if (yPos < 0) yPos = 0;
                 if (xPos > maxX) xPos = maxX;
@@ -721,13 +950,17 @@ class TimescalePlotlyCard extends HTMLElement {
                 hoverLine.style.display = 'block';
                 hoverLine.style.left = `${lineX}px`;
 
-                statusEl.textContent = `${formatted} • ${unitLabel}: ${pointValue}${unitSuffix}`;
+                if (showStatusText) {
+                    statusEl.textContent = `${formatted} • ${lines.join(' • ').replace(/<[^>]*>/g, '')}`;
+                }
             });
 
             chartEl.on('plotly_unhover', () => {
                 tooltip.style.display = 'none';
                 hoverLine.style.display = 'none';
-                statusEl.textContent = defaultStatus;
+                if (showStatusText) {
+                    statusEl.textContent = defaultStatus;
+                }
             });
 
             // Fallback: custom hover using mouse position (no Plotly hover events)
@@ -744,17 +977,17 @@ class TimescalePlotlyCard extends HTMLElement {
                 return Number.isFinite(t) ? t : 0;
             };
 
-            const findNearestIndex = (targetTime) => {
-                if (!x || x.length === 0) return 0;
+            const findNearestIndex = (targetTime, arrayX = x) => {
+                if (!arrayX || arrayX.length === 0) return 0;
                 let lo = 0;
-                let hi = x.length - 1;
+                let hi = arrayX.length - 1;
                 while (hi - lo > 1) {
                     const mid = Math.floor((lo + hi) / 2);
-                    if (getTimeSafe(x[mid]) < targetTime) lo = mid;
+                    if (getTimeSafe(arrayX[mid]) < targetTime) lo = mid;
                     else hi = mid;
                 }
-                const loDiff = Math.abs(getTimeSafe(x[lo]) - targetTime);
-                const hiDiff = Math.abs(getTimeSafe(x[hi]) - targetTime);
+                const loDiff = Math.abs(getTimeSafe(arrayX[lo]) - targetTime);
+                const hiDiff = Math.abs(getTimeSafe(arrayX[hi]) - targetTime);
                 return loDiff <= hiDiff ? lo : hi;
             };
 
@@ -777,11 +1010,9 @@ class TimescalePlotlyCard extends HTMLElement {
                 const frac = size.w > 0 ? clampedX / size.w : 0;
                 const targetTime = xStart + frac * (xEnd - xStart);
 
-                const nearestIndex = findNearestIndex(targetTime);
-
-                const unitLabel = labelText;
-                const unitSuffix = unitSuffixValue ? ` ${unitSuffixValue}` : '';
-                const date = new Date(x[nearestIndex] || 0);
+                const baseIndex = findNearestIndex(targetTime, x);
+                const baseTime = x[baseIndex] || 0;
+                const date = new Date(baseTime);
                 const formatted = date.toLocaleString('nl-NL', {
                     day: '2-digit',
                     month: '2-digit',
@@ -790,8 +1021,30 @@ class TimescalePlotlyCard extends HTMLElement {
                     minute: '2-digit'
                 });
 
-                const nearestValue = Number.isFinite(y[nearestIndex]) ? Number(y[nearestIndex]).toFixed(2) : '—';
-                tooltip.innerHTML = `<b>${formatted}</b><br>${unitLabel}: <b>${nearestValue}${unitSuffix}</b>`;
+                let tooltipLines = [];
+                let statusParts = [];
+
+                if (isMultiSeries) {
+                    seriesData.forEach(series => {
+                        const idx = findNearestIndex(targetTime, series.x);
+                        const seriesTime = series.x?.[idx] || baseTime;
+                        const value = series.y?.[idx];
+                        const unitSuffix = series.unitValue ? ` ${series.unitValue}` : '';
+                        const label = series.labelText || series.name || labelText;
+                        const displayVal = Number.isFinite(value) ? Number(value).toFixed(2) : '—';
+                        if (Number.isFinite(new Date(seriesTime).getTime())) {
+                            tooltipLines.push(`${label}: <b>${displayVal}${unitSuffix}</b>`);
+                            statusParts.push(`${label}: ${displayVal}${unitSuffix}`);
+                        }
+                    });
+                } else {
+                    const nearestValue = Number.isFinite(y[baseIndex]) ? Number(y[baseIndex]).toFixed(2) : '—';
+                    const unitSuffix = unitSuffixValue ? ` ${unitSuffixValue}` : '';
+                    tooltipLines.push(`${labelText}: <b>${nearestValue}${unitSuffix}</b>`);
+                    statusParts.push(`${labelText}: ${nearestValue}${unitSuffix}`);
+                }
+
+                tooltip.innerHTML = `<b>${formatted}</b><br>${tooltipLines.join('<br>')}`;
                 tooltip.style.display = 'block';
 
                 let xPos = px + 10;
@@ -809,15 +1062,20 @@ class TimescalePlotlyCard extends HTMLElement {
                 hoverLine.style.display = 'block';
                 hoverLine.style.left = `${px}px`;
 
-                statusEl.textContent = `${formatted} • ${unitLabel}: ${nearestValue}${unitSuffix}`;
+                if (showStatusText) {
+                    statusEl.textContent = `${formatted} • ${statusParts.join(' • ')}`;
+                }
             };
 
             this._mouseLeaveHandler = () => {
                 tooltip.style.display = 'none';
                 hoverLine.style.display = 'none';
-                statusEl.textContent = defaultStatus;
+                if (showStatusText) {
+                    statusEl.textContent = defaultStatus;
+                }
             };
 
+            overlay.style.pointerEvents = 'auto';
             overlay.addEventListener('mousemove', this._mouseMoveHandler);
             overlay.addEventListener('mouseleave', this._mouseLeaveHandler);
 
@@ -825,16 +1083,56 @@ class TimescalePlotlyCard extends HTMLElement {
             chartEl.on('plotly_afterplot', applyModebarStyles);
             chartEl.on('plotly_relayout', applyModebarStyles);
 
+            if (legendEl) {
+                if (showLegend) {
+                    legendEl.classList.add('visible');
+                    legendEl.innerHTML = seriesData.map((series, index) => {
+                        const safeName = series.name || 'Series';
+                        const color = series.lineColor || 'currentColor';
+                        const inactiveClass = this._legendVisibility?.[index] ? '' : ' inactive';
+                        return `<span class="legend-item${inactiveClass}" data-index="${index}" style="color: ${color}"><span class="legend-swatch"></span>${safeName}</span>`;
+                    }).join('');
+
+                    legendEl.querySelectorAll('.legend-item').forEach(item => {
+                        item.addEventListener('click', () => {
+                            const idx = Number(item.getAttribute('data-index'));
+                            if (!Number.isFinite(idx)) return;
+                            const current = this._legendVisibility?.[idx] !== false;
+                            const next = !current;
+                            const visibleCount = this._legendVisibility.filter(Boolean).length;
+                            if (!next && visibleCount <= 1) {
+                                return;
+                            }
+                            this._legendVisibility[idx] = next;
+                            item.classList.toggle('inactive', !next);
+                            if (window.Plotly && chartEl) {
+                                Plotly.restyle(chartEl, { visible: next ? true : false }, [idx]);
+                            }
+                        });
+                    });
+                } else {
+                    legendEl.classList.remove('visible');
+                    legendEl.innerHTML = '';
+                }
+            }
+
         } catch (error) {
-            statusEl.textContent = 'Error: ' + error.message;
+            if (statusEl && this._config.show_status_text !== false) {
+                statusEl.textContent = 'Error: ' + error.message;
+            }
             console.error('[TIMESCALE-PLOTLY-CARD]', error);
         }
     }
 
     loadPlotly() {
         return new Promise((resolve, reject) => {
+            if (window.Plotly) {
+                resolve();
+                return;
+            }
             const script = document.createElement('script');
-            script.src = 'https://cdn.plot.ly/plotly-latest.min.js';
+            const defaultUrl = 'https://cdn.plot.ly/plotly-2.27.0.min.js';
+            script.src = this._config.plotly_url || defaultUrl;
             script.onload = resolve;
             script.onerror = reject;
             document.head.appendChild(script);

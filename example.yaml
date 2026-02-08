@@ -8,12 +8,18 @@ title: Temperature Living Room
 # Time selection
 show_time_selector: true # Show time selector buttons (default: true)
 default_range: 12h # Start range: 1h, 2h, 3h, 6h, 12h, 24h, custom (default: 24h)
+time_ranges: [1h, 2h, 3h, 6h, 12h, 24h, 48h, 72h, custom] # Buttons to show
+show_custom_button: true # Show/hide custom range button
 
 # Data options
 downsample: 300 # Default: 300 seconds (5 minutes)
 height: 400 # Chart height in pixels
 y_margin: 2 # Y-axis margin above and below values (default: 5)
 nan_as_zero: false # Treat NaN values as 0
+gap_drop_to_zero: false # Draw vertical drops to 0 over gaps (requires nan_as_zero: true)
+gap_drop_min_points: 2 # Minimum consecutive missing points before dropping to 0
+connect_gaps: false # Connect gaps to keep a continuous line (ignored if gap_drop_to_zero: true)
+chart_type: line # line or bar
 
 # Chart styling
 line_color: rgb(75, 192, 192) # Line color
@@ -29,11 +35,14 @@ margin_left: 50 # Left margin
 
 # Axis styling
 xaxis_title: Time # X-axis title
-# yaxis_title: Temperature # Y-axis title (leave commented to auto-detect)
+# yaxis_title: Temperature # Left Y-axis title (set to NaN to hide)
+# yaxis_title_left: Temperature # Optional left Y-axis override
+# yaxis_title_right: Frequency # Optional right Y-axis override
 tooltip_label_text: Temperature Living Room # Tooltip/status label (optional)
 grid_color: rgba(128,128,128,0.2) # Grid line color
-xaxis_tick_padding: 6 # Space between grid and bottom tick labels
-yaxis_tick_padding: 6 # Space between grid and left tick labels
+axis_title_offset_y: 100px # Move top titles up/down
+axis_title_offset_left: 20px # Move left title horizontally
+axis_title_offset_right: 40px # Move right title horizontally
 
 # Background colors
 paper_bgcolor: rgba(0,0,0,0) # Outer chart background
@@ -92,6 +101,7 @@ apply_button_hover_color: var(--primary-color) # Apply hover background
 apply_button_hover_filter: brightness(1.05) # Apply hover filter
 
 # Status text styling
+show_status_text: true # Show or hide status text line
 status_text_color: var(--secondary-text-color) # Status text color
 status_text_size: 12px # Status text size
 status_text_padding: 8px 16px # Status text padding
@@ -113,3 +123,18 @@ download_scale: 2 # Download scale (higher = better quality)
 
 # Auto-refresh
 auto_refresh: 300 # Auto-refresh interval in seconds (0 = disabled)
+
+# --- Multiple entities example ---
+# type: custom:timescale-plotly-card
+# title: Klimaat Woonkamer
+# entities:
+#   - sensor_id: sensor.temperature_woonkamer
+#     name: Temperatuur
+#     line_color: rgb(255, 99, 132)
+#     fill_color: rgba(255, 99, 132, 0.2)
+#   - sensor_id: sensor.humidity_woonkamer
+#     name: Luchtvochtigheid
+#     line_color: rgb(54, 162, 235)
+#     fill_color: rgba(54, 162, 235, 0.2)
+#     yaxis: right
+#     fill: false

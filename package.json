@@ -1,6 +1,6 @@
 {
     "name": "timescale-plotly-card",
-    "version": "1.0.12",
+    "version": "1.0.13",
     "description": "A custom Lovelace card for displaying TimescaleDB data with Plotly charts",
     "main": "timescale-plotly-card.js",
     "scripts": {
@@ -14,13 +14,13 @@
         "plotly",
         "chart"
     ],
-    "author": "Your Name",
+    "author": "Mischa Bommer",
     "license": "MIT",
     "repository": {
         "type": "git",
-        "url": "https://github.com/your-username/timescale-plotly-card"
+        "url": "https://github.com/remmob/timescale-plotly-card"
     },
     "bugs": {
-        "url": "https://github.com/your-username/timescale-plotly-card/issues"
+        "url": "https://github.com/remmob/timescale-plotly-card/issues"
     }
 }

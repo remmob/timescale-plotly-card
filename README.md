@@ -110,7 +110,8 @@ The toolbar in the top-right corner provides:
 
 | Option | Type | Description |
 |--------|------|-------------|
-| `sensor_id` | string | **Required**. Entity ID from TimescaleDB |
+| `sensor_id` | string | **Required** when `entities` is not used. Entity ID from TimescaleDB |
+| `entities` | list | **Required** when `sensor_id` is not used. List of series objects |
 
 ### Time Selection
 
@@ -118,6 +119,8 @@ The toolbar in the top-right corner provides:
 |--------|------|---------|-------------|
 | `show_time_selector` | boolean | `true` | Show time range buttons |
 | `default_range` | string | `24h` | Initial range: `1h`, `2h`, `3h`, `6h`, `12h`, `24h`, `custom` |
+| `time_ranges` | list | `[1h,2h,3h,6h,12h,24h,custom]` | Which buttons to show (e.g. `48h`, `72h`) |
+| `show_custom_button` | boolean | `true` | Show or hide the Custom range button (optional if `custom` is omitted from `time_ranges`) |
 | `auto_refresh` | number | `300` | Auto-refresh interval in seconds (0 = disabled) |
 
 ### Data Options
@@ -128,12 +131,50 @@ The toolbar in the top-right corner provides:
 | `y_margin` | number | `5` | Y-axis margin above/below data values (bottom margin is 0 when min is between 0 and `y_margin`) |
 | `height` | number | `400` | Chart height in pixels |
 | `nan_as_zero` | boolean | `false` | Treat NaN values as 0 in the series |
+| `gap_drop_to_zero` | boolean | `false` | When `nan_as_zero` is true, draw vertical drops to 0 over gaps (keeps linear tops) |
+| `gap_drop_min_points` | number | `2` | Minimum consecutive missing points before dropping to 0 |
+| `connect_gaps` | boolean | `false` | Connect gaps to keep a continuous line (ignored if `gap_drop_to_zero` is true) |
+| `chart_type` | string | `line` | Chart type: `line` or `bar` |
 
 ### Tooltip & Status Text
 
 | Option | Type | Default | Description |
 |--------|------|---------|-------------|
 | `tooltip_label_text` | string | friendly name | Label used in tooltip and status text |
+
+### Multiple Entities (Series)
+
+You can show multiple entities in a single chart using `entities`. Each series can have its own color and label.
+
+```yaml
+type: custom:timescale-plotly-card
+title: Klimaat woonkamer
+entities:
+   - sensor_id: sensor.temperature_woonkamer
+      name: Temperatuur
+      line_color: rgb(255, 99, 132)
+      fill_color: rgba(255, 99, 132, 0.2)
+   - sensor_id: sensor.humidity_woonkamer
+      name: Luchtvochtigheid
+      line_color: rgb(54, 162, 235)
+      fill_color: rgba(54, 162, 235, 0.2)
+```
+
+#### Entity options
+
+| Option | Type | Description |
+|--------|------|-------------|
+| `sensor_id` | string | **Required**. Entity ID for this series |
+| `name` | string | Series name in legend and tooltip |
+| `line_color` | string | Line color for this series |
+| `fill_color` | string | Fill color for this series |
+| `fill` | boolean | Enable/disable fill for this series |
+| `line_width` | number | Line thickness for this series |
+| `line_shape` | string | Line shape (`linear`, `spline`, `hv`, `vh`, `hvh`, `vhv`) |
+| `unit` | string | Unit override for this series |
+| `tooltip_label_text` | string | Tooltip label override for this series |
+| `yaxis` | string | `left` or `right` (use `right` for separate scale) |
+| `type` | string | `line` or `bar` for this series |
 
 ### Chart Styling
 
@@ -142,6 +183,7 @@ The toolbar in the top-right corner provides:
 | `line_color` | string | `rgb(75,192,192)` | Line color |
 | `line_width` | number | `2` | Line thickness |
 | `fill_color` | string | `rgba(75,192,192,0.2)` | Fill color under line |
+| `fill` | boolean | `true` | Enable area fill under line |
 | `unit` | string | `''` | Y-axis unit label |
 
 ### Layout Options
@@ -158,7 +200,13 @@ The toolbar in the top-right corner provides:
 | Option | Type | Default | Description |
 |--------|------|---------|-------------|
 | `xaxis_title` | string | `Time` | X-axis title |
-| `yaxis_title` | string | auto | Y-axis title |
+| `yaxis_title` | string | auto | Left Y-axis title (set to `NaN` to hide) |
+| `yaxis_title_left` | string | auto | Left Y-axis title override (set to `NaN` to hide) |
+| `yaxis_title_right` | string | auto | Right Y-axis title override (set to `NaN` to hide) |
+| `yaxis_title_position` | string | `axis` | `axis` (default) or `top` to show titles above scales |
+| `axis_title_offset_y` | string | `-18px` | Vertical offset for top titles |
+| `axis_title_offset_left` | string | `0px` | Horizontal offset for left top title |
+| `axis_title_offset_right` | string | `0px` | Horizontal offset for right top title |
 | `grid_color` | string | rgba | Grid line color |
 | `xaxis_tick_padding` | number | `6` | Space between grid and bottom tick labels |
 | `yaxis_tick_padding` | number | `6` | Space between grid and left tick labels |
@@ -221,6 +269,7 @@ The toolbar in the top-right corner provides:
 
 | Option | Type | Default | Description |
 |--------|------|---------|-------------|
+| `show_status_text` | boolean | `true` | Show or hide the status text line |
 | `status_text_color` | string | secondary text | Status text color |
 | `status_text_size` | string | `12px` | Status text size |
 | `status_text_padding` | string | `8px 16px` | Status text padding |
@@ -296,7 +345,7 @@ unit: °C
 | `downsample` | number | No | 3600 | Aggregation interval in seconds |
 | `height` | number | No | 400 | Chart height in pixels |
 | `line_color` | string | No | rgb(75,192,192) | Line color (RGB) |
-| `fill_color` | string | No | rgba(75,192,192,0.2) | Fill color (RGBA) |
+| `fill_color` | string | No | rgba(75, 192, 192, 0.2) | Fill color (RGBA) |
 | `unit` | string | No | '' | Y-axis unit label |
 
 ## Examples
@@ -334,13 +383,69 @@ unit: kW
 line_color: rgb(75, 192, 75)
 ```
 
+
+
+> **Note:** This integration is a work in progress. Features and functionality may change or be incomplete.
+
+## Database Selection (New)
+
+This card now supports database selection at both card and series level. This is useful if you have multiple TimescaleDB databases (e.g., LTSS and Scribe).
+
+### Card Level
+
+You can set the database for the entire card:
+
+```yaml
+ type: custom:timescale-plotly-card
+ database: ltss  # or scribe
+ sensor_id: sensor.temperature_woonkamer
+```
+
+### Series Level
+
+You can select a different database for each series:
+
+```yaml
+ type: custom:timescale-plotly-card
+ title: Living Room Climate
+ entities:
+   - sensor_id: sensor.temperature_woonkamer
+     name: Temperature
+     database: ltss
+   - sensor_id: sensor.amber_4h_average_ambient_temperature
+     name: Outdoor temp 4h average
+     database: scribe
+```
+
+If both card and series have a database set, the series setting takes precedence.
+
+### Options
+
+| Option   | Type   | Level      | Description |
+|----------|--------|-----------|-------------|
+| database | string | card/series| Database name as configured in Timescale Database Reader |
+
+> **Important:** For Scribe, set the table option to `states`. For LTSS, set the table option to `ltss`. The correct table must be specified for each database in your card or series configuration:
+
+```yaml
+ type: custom:timescale-plotly-card
+ database: scribe
+ table: states
+ sensor_id: sensor.amber_4h_average_ambient_temperature
+```
+
+```yaml
+ type: custom:timescale-plotly-card
+ database: ltss
+ table: ltss
+ sensor_id: sensor.temperature_woonkamer
+```
+
+If you use multiple databases in one card, set the `table` option for each series as needed.
+
 ## Support
 
 For issues and feature requests, please use the [GitHub issue tracker](https://github.com/remmob/timescale-plotly-card/issues).
 
 ---
 ©2026 Bommer Software | Author: Mischa Bommer
-
-> **Note:** This integration is a work in progress. Features and functionality may change or be incomplete.
-
-
