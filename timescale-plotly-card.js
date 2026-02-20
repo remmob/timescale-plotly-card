@@ -119,7 +119,8 @@ class TimescalePlotlyCard extends HTMLElement {
                     </div>
                 ` : '';
 
-        this.innerHTML = `
+        const root = this.shadowRoot || this.attachShadow({ mode: 'open' });
+        root.innerHTML = `
       <style>
         ha-card {
           overflow: hidden;
@@ -380,7 +381,8 @@ class TimescalePlotlyCard extends HTMLElement {
     }
 
     attachEventListeners() {
-        const buttons = this.querySelectorAll('.time-btn');
+        const root = this.shadowRoot || this;
+        const buttons = root.querySelectorAll('.time-btn');
         buttons.forEach(btn => {
             btn.addEventListener('click', (e) => {
                 const range = e.target.getAttribute('data-range');
@@ -388,7 +390,7 @@ class TimescalePlotlyCard extends HTMLElement {
                 buttons.forEach(b => b.classList.remove('active'));
                 e.target.classList.add('active');
 
-                const customRange = this.querySelector('.custom-range');
+                const customRange = root.querySelector('.custom-range');
                 if (range === 'custom') {
                     customRange.classList.add('visible');
                 } else {
@@ -398,11 +400,11 @@ class TimescalePlotlyCard extends HTMLElement {
             });
         });
 
-        const applyBtn = this.querySelector('#apply-custom');
+        const applyBtn = root.querySelector('#apply-custom');
         if (applyBtn) {
             applyBtn.addEventListener('click', () => {
-                const startInput = this.querySelector('#start-date');
-                const endInput = this.querySelector('#end-date');
+                const startInput = root.querySelector('#start-date');
+                const endInput = root.querySelector('#end-date');
                 if (startInput.value && endInput.value) {
                     this._customStart = new Date(startInput.value);
                     this._customEnd = new Date(endInput.value);
@@ -413,12 +415,13 @@ class TimescalePlotlyCard extends HTMLElement {
     }
 
     async loadData() {
-        const chartEl = this.querySelector('#chart');
-        const statusEl = this.querySelector('#status');
-        const legendEl = this.querySelector('#legend');
-        const axisTitlesEl = this.querySelector('#axis-titles');
-        const axisTitleLeftEl = this.querySelector('#axis-title-left');
-        const axisTitleRightEl = this.querySelector('#axis-title-right');
+        const root = this.shadowRoot || this;
+        const chartEl = root.querySelector('#chart');
+        const statusEl = root.querySelector('#status');
+        const legendEl = root.querySelector('#legend');
+        const axisTitlesEl = root.querySelector('#axis-titles');
+        const axisTitleLeftEl = root.querySelector('#axis-title-left');
+        const axisTitleRightEl = root.querySelector('#axis-title-right');
         if (!chartEl || !this._hass) return;
 
         try {
@@ -494,8 +497,10 @@ class TimescalePlotlyCard extends HTMLElement {
                 return;
             }
 
-            const treatNaNAsZero = this._config.nan_as_zero === true;
-            const gapDropToZero = this._config.gap_drop_to_zero === true;
+            const defaultTreatNaNAsZero = this._config.nan_as_zero === true;
+            const defaultGapDropToZero = this._config.gap_drop_to_zero === true;
+            const defaultConnectGaps = this._config.connect_gaps === true;
+            const defaultExtendEdgeGaps = this._config.extend_edge_gaps === true;
             const downsampleMs = Math.max(1, Number(downsample) * 1000);
 
             const allTimes = responses
@@ -523,6 +528,11 @@ class TimescalePlotlyCard extends HTMLElement {
             ];
 
             const buildSeries = (seriesConfig, response, index) => {
+                const treatNaNAsZero = seriesConfig.nan_as_zero === true || (seriesConfig.nan_as_zero !== false && defaultTreatNaNAsZero);
+                const gapDropToZero = seriesConfig.gap_drop_to_zero === true || (seriesConfig.gap_drop_to_zero !== false && defaultGapDropToZero);
+                const gapDropMinPoints = Math.max(1, Number(seriesConfig.gap_drop_min_points ?? this._config.gap_drop_min_points ?? 2));
+                const connectGaps = seriesConfig.connect_gaps === true || (seriesConfig.connect_gaps !== false && defaultConnectGaps);
+                const extendEdgeGaps = seriesConfig.extend_edge_gaps === true || (seriesConfig.extend_edge_gaps !== false && defaultExtendEdgeGaps);
                 const sensorId = seriesConfig.sensor_id;
                 const stateObj = this._hass?.states?.[sensorId];
                 const unitFromState = stateObj?.attributes?.unit_of_measurement || '';
@@ -550,12 +560,31 @@ class TimescalePlotlyCard extends HTMLElement {
                     return Number.isFinite(raw) ? raw : null;
                 });
 
+                const ySource = (() => {
+                    if (!extendEdgeGaps || yBase.length === 0) return yBase;
+                    const values = [...yBase];
+                    const firstFinite = values.findIndex(v => Number.isFinite(v));
+                    if (firstFinite === -1) return values;
+                    const firstValue = values[firstFinite];
+                    for (let i = 0; i < firstFinite; i += 1) {
+                        values[i] = firstValue;
+                    }
+                    let lastFinite = values.length - 1;
+                    while (lastFinite >= 0 && !Number.isFinite(values[lastFinite])) lastFinite -= 1;
+                    if (lastFinite >= 0) {
+                        const lastValue = values[lastFinite];
+                        for (let i = lastFinite + 1; i < values.length; i += 1) {
+                            values[i] = lastValue;
+                        }
+                    }
+                    return values;
+                })();
+
                 let x = xBase;
-                let y = yBase;
+                let y = ySource;
                 let plotText = [];
 
                 if (treatNaNAsZero && gapDropToZero) {
-                    const gapDropMinPoints = Math.max(1, Number(this._config.gap_drop_min_points ?? 2));
                     const plotX = [];
                     const plotY = [];
                     const plotTextLocal = [];
@@ -571,7 +600,7 @@ class TimescalePlotlyCard extends HTMLElement {
                     let i = 0;
                     while (i < xBase.length) {
                         const time = xBase[i];
-                        const val = yBase[i];
+                        const val = ySource[i];
 
                         if (Number.isFinite(val)) {
                             pushPoint(time, val);
@@ -581,7 +610,7 @@ class TimescalePlotlyCard extends HTMLElement {
                         }
 
                         let j = i;
-                        while (j < xBase.length && !Number.isFinite(yBase[j])) j += 1;
+                        while (j < xBase.length && !Number.isFinite(ySource[j])) j += 1;
                         const gapLen = j - i;
 
                         if (gapLen < gapDropMinPoints) {
@@ -603,10 +632,10 @@ class TimescalePlotlyCard extends HTMLElement {
 
                         pushPoint(xBase[j - 1], 0);
 
-                        if (j < xBase.length && Number.isFinite(yBase[j])) {
+                        if (j < xBase.length && Number.isFinite(ySource[j])) {
                             pushPoint(xBase[j], 0);
-                            pushPoint(xBase[j], yBase[j]);
-                            lastFinite = yBase[j];
+                            pushPoint(xBase[j], ySource[j]);
+                            lastFinite = ySource[j];
                             i = j + 1;
                         } else {
                             i = j;
@@ -618,7 +647,7 @@ class TimescalePlotlyCard extends HTMLElement {
                     plotText = plotTextLocal;
                 } else {
                     if (treatNaNAsZero) {
-                        y = yBase.map(v => (Number.isFinite(v) ? v : 0));
+                        y = ySource.map(v => (Number.isFinite(v) ? v : 0));
                     }
                     plotText = x.map((time, i) => {
                         const formatted = new Date(time).toLocaleString('nl-NL', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
@@ -648,7 +677,9 @@ class TimescalePlotlyCard extends HTMLElement {
                     unitValue,
                     fillEnabled,
                     axisSide,
-                    chartType
+                    chartType,
+                    gapDropToZero,
+                    connectGaps
                 };
             };
 
@@ -694,7 +725,6 @@ class TimescalePlotlyCard extends HTMLElement {
 
             const downloadFormat = String(this._config.download_format || 'png').toLowerCase();
 
-            const connectGaps = this._config.connect_gaps === true;
             const showLegend = seriesData.length > 1;
             const isMultiSeries = seriesData.length > 1;
             const normalizeTitle = (value) => {
@@ -747,7 +777,7 @@ class TimescalePlotlyCard extends HTMLElement {
                     text: series.plotText,
                     hoverinfo: 'text',
                     hoveron: isBar ? 'points' : 'points',
-                    connectgaps: isBar ? false : (gapDropToZero ? false : connectGaps),
+                    connectgaps: isBar ? false : (series.gapDropToZero ? false : series.connectGaps),
                     name: series.name,
                     showlegend: showLegend,
                     yaxis: series.axisSide === 'right' ? 'y2' : 'y',
@@ -905,6 +935,17 @@ class TimescalePlotlyCard extends HTMLElement {
                 chartEl.removeAllListeners('plotly_unhover');
             }
 
+            const clampTooltipPosition = (xPos, yPos, containerRect) => {
+                const margin = 8;
+                const tooltipWidth = tooltip.offsetWidth || 220;
+                const tooltipHeight = tooltip.offsetHeight || 80;
+                const maxX = Math.max(0, containerRect.width - tooltipWidth - margin);
+                const maxY = Math.max(0, containerRect.height - tooltipHeight - margin);
+                const clampedX = Math.min(Math.max(xPos, margin), maxX);
+                const clampedY = Math.min(Math.max(yPos, margin), maxY);
+                return { x: clampedX, y: clampedY };
+            };
+
             chartEl.on('plotly_hover', (eventData) => {
                 const points = eventData?.points || [];
                 if (!points.length) return;
@@ -919,13 +960,21 @@ class TimescalePlotlyCard extends HTMLElement {
                     minute: '2-digit'
                 });
 
-                const lines = points.map((pt) => {
-                    const meta = pt?.data?.meta || {};
-                    const unitLabel = meta.labelText || pt?.data?.name || labelText;
-                    const unitSuffix = meta.unitValue ? ` ${meta.unitValue}` : (unitSuffixValue ? ` ${unitSuffixValue}` : '');
-                    const pointValue = Number.isFinite(pt.y) ? Number(pt.y).toFixed(2) : '—';
-                    return `${unitLabel}: <b>${pointValue}${unitSuffix}</b>`;
-                });
+                const hoverTime = new Date(firstPoint.x || 0).getTime();
+                const lines = isMultiSeries
+                    ? seriesData.map((series) => {
+                        const pointValueRaw = getTooltipValueAtTime(series, hoverTime);
+                        const pointValue = Number.isFinite(pointValueRaw) ? Number(pointValueRaw).toFixed(2) : '—';
+                        const unitLabel = series.labelText || series.name || labelText;
+                        const unitSuffix = series.unitValue ? ` ${series.unitValue}` : '';
+                        return `${unitLabel}: <b>${pointValue}${unitSuffix}</b>`;
+                    })
+                    : (() => {
+                        const pointValueRaw = getTooltipValueAtTime(seriesData[0], hoverTime);
+                        const pointValue = Number.isFinite(pointValueRaw) ? Number(pointValueRaw).toFixed(2) : '—';
+                        const unitSuffix = unitSuffixValue ? ` ${unitSuffixValue}` : '';
+                        return [`${labelText}: <b>${pointValue}${unitSuffix}</b>`];
+                    })();
 
                 tooltip.innerHTML = `<b>${formatted}</b><br>${lines.join('<br>')}`;
                 tooltip.style.display = 'block';
@@ -937,12 +986,9 @@ class TimescalePlotlyCard extends HTMLElement {
                 let yPos = clientY - rect.top - 10;
                 const lineX = clientX - rect.left;
 
-                const maxX = rect.width - 200;
-                const maxY = rect.height - 60;
-                if (xPos < 0) xPos = 0;
-                if (yPos < 0) yPos = 0;
-                if (xPos > maxX) xPos = maxX;
-                if (yPos > maxY) yPos = maxY;
+                const clamped = clampTooltipPosition(xPos, yPos, rect);
+                xPos = clamped.x;
+                yPos = clamped.y;
 
                 tooltip.style.left = `${xPos}px`;
                 tooltip.style.top = `${yPos}px`;
@@ -991,6 +1037,38 @@ class TimescalePlotlyCard extends HTMLElement {
                 return loDiff <= hiDiff ? lo : hi;
             };
 
+            const getTooltipValueAtTime = (series, targetTime) => {
+                if (!series?.x?.length || !series?.y?.length || !Number.isFinite(targetTime)) return null;
+
+                const idx = findNearestIndex(targetTime, series.x);
+                const direct = series.y?.[idx];
+                if (Number.isFinite(direct)) return Number(direct);
+
+                if (!series.connectGaps || series.gapDropToZero) return null;
+
+                let prev = idx;
+                while (prev >= 0 && !Number.isFinite(series.y?.[prev])) prev -= 1;
+                let next = idx;
+                while (next < series.y.length && !Number.isFinite(series.y?.[next])) next += 1;
+
+                const hasPrev = prev >= 0 && Number.isFinite(series.y?.[prev]);
+                const hasNext = next < series.y.length && Number.isFinite(series.y?.[next]);
+
+                if (hasPrev && hasNext) {
+                    const t0 = getTimeSafe(series.x[prev]);
+                    const t1 = getTimeSafe(series.x[next]);
+                    const v0 = Number(series.y[prev]);
+                    const v1 = Number(series.y[next]);
+                    if (!Number.isFinite(t0) || !Number.isFinite(t1) || t1 === t0) return v0;
+                    const ratio = (targetTime - t0) / (t1 - t0);
+                    return v0 + ratio * (v1 - v0);
+                }
+
+                if (hasPrev) return Number(series.y[prev]);
+                if (hasNext) return Number(series.y[next]);
+                return null;
+            };
+
             this._mouseMoveHandler = (evt) => {
                 const layout = chartEl._fullLayout;
                 if (!layout || !layout.xaxis || !x || x.length === 0) return;
@@ -1026,19 +1104,16 @@ class TimescalePlotlyCard extends HTMLElement {
 
                 if (isMultiSeries) {
                     seriesData.forEach(series => {
-                        const idx = findNearestIndex(targetTime, series.x);
-                        const seriesTime = series.x?.[idx] || baseTime;
-                        const value = series.y?.[idx];
+                        const value = getTooltipValueAtTime(series, targetTime);
                         const unitSuffix = series.unitValue ? ` ${series.unitValue}` : '';
                         const label = series.labelText || series.name || labelText;
                         const displayVal = Number.isFinite(value) ? Number(value).toFixed(2) : '—';
-                        if (Number.isFinite(new Date(seriesTime).getTime())) {
-                            tooltipLines.push(`${label}: <b>${displayVal}${unitSuffix}</b>`);
-                            statusParts.push(`${label}: ${displayVal}${unitSuffix}`);
-                        }
+                        tooltipLines.push(`${label}: <b>${displayVal}${unitSuffix}</b>`);
+                        statusParts.push(`${label}: ${displayVal}${unitSuffix}`);
                     });
                 } else {
-                    const nearestValue = Number.isFinite(y[baseIndex]) ? Number(y[baseIndex]).toFixed(2) : '—';
+                    const nearestValueRaw = getTooltipValueAtTime(seriesData[0], targetTime);
+                    const nearestValue = Number.isFinite(nearestValueRaw) ? Number(nearestValueRaw).toFixed(2) : '—';
                     const unitSuffix = unitSuffixValue ? ` ${unitSuffixValue}` : '';
                     tooltipLines.push(`${labelText}: <b>${nearestValue}${unitSuffix}</b>`);
                     statusParts.push(`${labelText}: ${nearestValue}${unitSuffix}`);
@@ -1049,12 +1124,9 @@ class TimescalePlotlyCard extends HTMLElement {
 
                 let xPos = px + 10;
                 let yPos = py - 10;
-                const maxX = rect.width - 160;
-                const maxY = rect.height - 40;
-                if (xPos < 0) xPos = 0;
-                if (yPos < 0) yPos = 0;
-                if (xPos > maxX) xPos = maxX;
-                if (yPos > maxY) yPos = maxY;
+                const clamped = clampTooltipPosition(xPos, yPos, rect);
+                xPos = clamped.x;
+                yPos = clamped.y;
 
                 tooltip.style.left = `${xPos}px`;
                 tooltip.style.top = `${yPos}px`;

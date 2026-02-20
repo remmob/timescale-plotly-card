@@ -2,7 +2,7 @@
 
 [![hacs_badge](https://img.shields.io/badge/HACS-Custom-orange.svg)](https://github.com/custom-components/hacs)
 
- > **Note:**  <span style="font-size: 2em">⚠️</span> This card is under heavy development. Features and options may change frequently.
+ > **Note:**  <span style="font-size: 2em">⚠️</span> This card is under development. Features and options may change frequently.
 
 
 A custom Lovelace card for Home Assistant that displays Timescale database historical data using interactive Plotly charts.
@@ -21,9 +21,8 @@ A custom Lovelace card for Home Assistant that displays Timescale database histo
 
 ## Requirements
 
-> **Note:** The Timescale database Reader integration supports any TimescaleDB database. It has been tested with databases using the `ltss` table (from the [LTSS integration](https://github.com/freol35241/ltss)) and with [Scribe](https://github.com/jonathan-gatard/scribe). You do not need a special Home Assistant database; any compatible TimescaleDB schema will work. 
-This means you can show data from other sources (e.g., IoT devices, sensors) stored in TimescaleDB.
-See the Timescale Database Reader [README](https://github.com/remmob/timescale_database_reader) for details and example queries.
+> **Note:** The Timescale database Reader integration supports any TimescaleDB database. using the `ltss` table (from the [LTSS integration](https://github.com/freol35241/ltss)) and with [Scribe](https://github.com/jonathan-gatard/scribe). .
+See also the Timescale Database Reader [README](https://github.com/remmob/timescale_database_reader) 
 
 ## Installation
 
@@ -119,7 +118,7 @@ The toolbar in the top-right corner provides:
 |--------|------|---------|-------------|
 | `show_time_selector` | boolean | `true` | Show time range buttons |
 | `default_range` | string | `24h` | Initial range: `1h`, `2h`, `3h`, `6h`, `12h`, `24h`, `custom` |
-| `time_ranges` | list | `[1h,2h,3h,6h,12h,24h,custom]` | Which buttons to show (e.g. `48h`, `72h`) |
+| `time_ranges` | list | `[1h,2h,3h,6h,12h,24h,custom]` | Which buttons to show (e.g. `48h`, `72h`). <br>**Tip:** You can add any hour interval you want, such as `4h`, `5h`, `10h`, etc. The card supports all valid numbers followed by `h`  |
 | `show_custom_button` | boolean | `true` | Show or hide the Custom range button (optional if `custom` is omitted from `time_ranges`) |
 | `auto_refresh` | number | `300` | Auto-refresh interval in seconds (0 = disabled) |
 
@@ -134,7 +133,10 @@ The toolbar in the top-right corner provides:
 | `gap_drop_to_zero` | boolean | `false` | When `nan_as_zero` is true, draw vertical drops to 0 over gaps (keeps linear tops) |
 | `gap_drop_min_points` | number | `2` | Minimum consecutive missing points before dropping to 0 |
 | `connect_gaps` | boolean | `false` | Connect gaps to keep a continuous line (ignored if `gap_drop_to_zero` is true) |
+| `extend_edge_gaps` | boolean | `false` | Extend first/last known value to chart edges so lines can start/end without edge gaps |
 | `chart_type` | string | `line` | Chart type: `line` or `bar` |
+
+`nan_as_zero`, `gap_drop_to_zero`, `gap_drop_min_points`, `connect_gaps`, and `extend_edge_gaps` can also be set per series in `entities`. If not set on a series, the global card-level value is used.
 
 ### Tooltip & Status Text
 
@@ -175,6 +177,30 @@ entities:
 | `tooltip_label_text` | string | Tooltip label override for this series |
 | `yaxis` | string | `left` or `right` (use `right` for separate scale) |
 | `type` | string | `line` or `bar` for this series |
+| `nan_as_zero` | boolean | Override NaN-to-zero handling for this series (falls back to global setting) |
+| `gap_drop_to_zero` | boolean | Override gap drop-to-zero behavior for this series (falls back to global setting) |
+| `gap_drop_min_points` | number | Override minimum consecutive missing points before dropping to 0 (falls back to global setting) |
+| `connect_gaps` | boolean | Override gap connection behavior for this series (falls back to global setting) |
+| `extend_edge_gaps` | boolean | Override edge-gap extension for this series (falls back to global setting) |
+
+Example per-series override:
+
+```yaml
+type: custom:timescale-plotly-card
+nan_as_zero: true
+gap_drop_to_zero: true
+extend_edge_gaps: true
+entities:
+   - sensor_id: sensor.temperature_woonkamer
+      name: Temperatuur woonkamer
+      nan_as_zero: false
+      gap_drop_to_zero: false
+      gap_drop_min_points: 6
+      connect_gaps: true
+      extend_edge_gaps: true
+   - sensor_id: sensor.amber_4h_average_ambient_temperature
+      name: Buiten temp 4h gemiddelde
+```
 
 ### Chart Styling
 
@@ -359,6 +385,11 @@ days: 7
 downsample: 3600
 unit: °C
 line_color: rgb(255, 99, 132)
+database: ltss
+fill: false
+axis_title_offset_y: 100px
+axis_title_offset_left: 20px
+axis_title_offset_right: 40px
 ```
 
 ### Humidity (3 days, 10-min aggregation)
@@ -370,6 +401,11 @@ days: 3
 downsample: 600
 unit: '%'
 line_color: rgb(54, 162, 235)
+database: scribe
+fill: false
+axis_title_offset_y: 100px
+axis_title_offset_left: 20px
+axis_title_offset_right: 40px
 ```
 
 ### Power (14 days, hourly)
@@ -381,15 +417,18 @@ days: 14
 downsample: 3600
 unit: kW
 line_color: rgb(75, 192, 75)
+database: scribe
+fill: false
+axis_title_offset_y: 100px
+axis_title_offset_left: 20px
+axis_title_offset_right: 40px
 ```
 
+> **Note:** This Card is a work in progress. Features and functionality may change or be incomplete.
 
+## Database Selection
 
-> **Note:** This integration is a work in progress. Features and functionality may change or be incomplete.
-
-## Database Selection (New)
-
-This card now supports database selection at both card and series level. This is useful if you have multiple TimescaleDB databases (e.g., LTSS and Scribe).
+This card supports database selection at both card and series level. This is useful if you have multiple TimescaleDB databases (e.g., LTSS and Scribe).
 
 ### Card Level
 

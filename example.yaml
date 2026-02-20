@@ -1,128 +1,145 @@
-# TimescaleDB Plotly Card - v2.0.0
-# Complete configuration with all options
+
+
+
+
+
+
+
+
+
+
+
+
 
 type: custom:timescale-plotly-card
-sensor_id: sensor.temperature_woonkamer
-title: Temperature Living Room
+title: Livingroom
 
 # Time selection
-show_time_selector: true # Show time selector buttons (default: true)
-default_range: 12h # Start range: 1h, 2h, 3h, 6h, 12h, 24h, custom (default: 24h)
-time_ranges: [1h, 2h, 3h, 6h, 12h, 24h, 48h, 72h, custom] # Buttons to show
-show_custom_button: true # Show/hide custom range button
+show_time_selector: true
+default_range: 12h
+time_ranges:
+  - 1h
+  - 2h
+  - 3h
+  - 6h
+  - 12h
+  - 24h
+  - 48h
+  - 72h
+  - custom
+show_custom_button: true
 
 # Data options
-downsample: 300 # Default: 300 seconds (5 minutes)
-height: 400 # Chart height in pixels
-y_margin: 2 # Y-axis margin above and below values (default: 5)
-nan_as_zero: false # Treat NaN values as 0
-gap_drop_to_zero: false # Draw vertical drops to 0 over gaps (requires nan_as_zero: true)
-gap_drop_min_points: 2 # Minimum consecutive missing points before dropping to 0
-connect_gaps: false # Connect gaps to keep a continuous line (ignored if gap_drop_to_zero: true)
-chart_type: line # line or bar
+downsample: 300
+height: 400
+y_margin: 2
+
+# Entities (multi-series, with per-series options)
+entities:
+  - sensor_id: sensor.temperature_woonkamer
+    name: Temperatuur woonkamer
+    tooltip_label_text: Temperatuur woonkamer
+    line_color: rgb(255, 99, 132)
+    fill_color: rgba(255, 99, 132, 0.1)
+    fill: true
+    unit: °C
+    database: ltss
+    connect_gaps: true           # NEW: connect gaps for this series
+    extend_edge_gaps: true       # NEW: extend first/last value to chart edge
+  - sensor_id: sensor.amber_4h_average_ambient_temperature
+    name: Buiten temp 4h gemiddelde
+    tooltip_label_text: Buiten temp 4h gemiddelde
+    line_color: rgb(54, 162, 235)
+    fill_color: rgba(54, 162, 235, 0.3)
+    fill: true
+    unit: °C
+    yaxis: left
+    database: scribe
+    connect_gaps: true
+    extend_edge_gaps: true
+  - sensor_id: sensor.amber_24h_average_ambient_temperature
+    name: Buiten temp 24h gemiddelde
+    tooltip_label_text: Buiten temp 24h gemiddelde
+    line_color: rgb(50,205,50)
+    fill_color: rgba(50,205,50,0.3)
+    fill: true
+    unit: °C
+    yaxis: left
+    database: scribe
+    connect_gaps: true
+    extend_edge_gaps: true
 
 # Chart styling
-line_color: rgb(75, 192, 192) # Line color
-line_width: 2 # Line thickness
-fill_color: rgba(75, 192, 192, 0.2) # Fill color
-# unit: °C # Y-axis unit (leave commented to auto-detect)
-
-# Layout options
-margin_top: 40 # Top margin
-margin_right: 10 # Right margin
-margin_bottom: 40 # Bottom margin
-margin_left: 50 # Left margin
+line_shape: linear
+line_width: 2
+margin_top: 60
+margin_right: 10
+margin_bottom: 40
+margin_left: 50
 
 # Axis styling
-xaxis_title: Time # X-axis title
-# yaxis_title: Temperature # Left Y-axis title (set to NaN to hide)
-# yaxis_title_left: Temperature # Optional left Y-axis override
-# yaxis_title_right: Frequency # Optional right Y-axis override
-tooltip_label_text: Temperature Living Room # Tooltip/status label (optional)
-grid_color: rgba(128,128,128,0.2) # Grid line color
-axis_title_offset_y: 100px # Move top titles up/down
-axis_title_offset_left: 20px # Move left title horizontally
-axis_title_offset_right: 40px # Move right title horizontally
+xaxis_title: Time
+yaxis_title_left: C
+tooltip_label_text: Temperatuur woonkamer
+grid_color: rgba(128,128,128,0.2)
+axis_title_offset_y: 100px
+axis_title_offset_left: 20px
+axis_title_offset_right: 40px
 
 # Background colors
-paper_bgcolor: rgba(0,0,0,0) # Outer chart background
-plot_bgcolor: rgba(0,0,0,0) # Inner chart background
-font_color: var(--primary-text-color) # Text color
+paper_bgcolor: rgba(0,0,0,0)
+plot_bgcolor: rgba(0,0,0,0)
+font_color: var(--primary-text-color)
 
 # Button styling
-selector_background_color: var(--card-background-color) # Selector background
-button_background_color: var(--primary-background-color) # Button background
-button_border_color: var(--divider-color) # Button border
-button_text_color: var(--primary-text-color) # Button text
-button_active_color: var(--primary-color) # Active button color
-button_radius: 4px # Button border radius
-button_hover_color: var(--secondary-background-color) # Button hover background
-button_hover_text_color: var(--primary-text-color) # Button hover text
-button_active_text_color: white # Button active text
+selector_background_color: var(--card-background-color)
+button_background_color: var(--primary-background-color)
+button_border_color: var(--divider-color)
+button_text_color: var(--primary-text-color)
+button_active_color: var(--primary-color)
+button_radius: 4px
+button_hover_color: var(--secondary-background-color)
+button_hover_text_color: var(--primary-text-color)
+button_active_text_color: white
 
 # Modebar (toolbar) styling
-show_modebar: true # Show Plotly modebar (default: true)
-# Use one of: modebar_bg_color | modebar_bgcolor | modebar_bg
-modebar_bg_color: rgba(255,255,255,0.9) # Modebar background color
-modebar_radius: 4px # Modebar border radius
-modebar_icon_color: var(--primary-text-color) # Modebar icon color
-modebar_icon_hover_color: var(--primary-color) # Modebar icon hover color
-modebar_icon_active_color: var(--primary-color) # Modebar icon active color
+show_modebar: true
+modebar_bg_color: rgba(255,255,255,0.9)
+modebar_radius: 4px
+modebar_icon_color: var(--primary-text-color)
+modebar_icon_hover_color: var(--primary-color)
+modebar_icon_active_color: var(--primary-color)
 
 # Custom range styling
-custom_range_background_color: var(--card-background-color) # Custom range background
-custom_range_border_color: var(--divider-color) # Custom range top border
-custom_range_text_color: var(--primary-text-color) # Custom range label text
-custom_range_label_size: 13px # Custom range label size
+custom_range_background_color: var(--card-background-color)
+custom_range_border_color: var(--divider-color)
+custom_range_text_color: var(--primary-text-color)
+custom_range_label_size: 13px
 
 # Date input styling
-date_input_background_color: var(--primary-background-color) # Input background
-date_input_border_color: var(--divider-color) # Input border
-date_input_text_color: var(--primary-text-color) # Input text
-date_input_padding: 4px 8px # Input padding
-date_input_radius: 4px # Input radius
-date_input_size: 13px # Input text size
-date_input_accent_color: var(--primary-color) # Input accent
-date_input_scheme: dark # Popup scheme (dark/light)
-date_input_focus_color: rgba(3,169,244,0.4) # Focus ring color
-date_input_caret_color: var(--primary-text-color) # Caret color
-date_input_field_background_color: transparent # Inner field background
-date_picker_icon_filter: invert(0.9) # Picker icon filter
-date_picker_icon_opacity: 0.8 # Picker icon opacity
+date_input_background_color: var(--primary-background-color)
+date_input_border_color: var(--divider-color)
+date_input_text_color: var(--primary-text-color)
+date_input_padding: 4px 8px
+date_input_radius: 4px
+date_input_size: 13px
+date_input_accent_color: var(--primary-color)
+date_input_scheme: dark
+date_input_focus_color: rgba(3,169,244,0.4)
+date_input_caret_color: var(--primary-text-color)
+date_input_field_background_color: transparent
+date_picker_icon_filter: invert(0.9)
+date_picker_icon_opacity: 0.8
 
 # Apply button styling
-apply_button_padding: 6px 16px # Apply button padding
-apply_button_background_color: var(--primary-color) # Apply button background
-apply_button_border_color: transparent # Apply button border
-apply_button_text_color: white # Apply button text
-apply_button_radius: 4px # Apply button radius
-apply_button_size: 13px # Apply button text size
-apply_button_hover_color: var(--primary-color) # Apply hover background
-apply_button_hover_filter: brightness(1.05) # Apply hover filter
+apply_button_padding: 6px 16px
+apply_button_background_color: var(--primary-color)
+apply_button_border_color: transparent
+apply_button_text_color: white
+apply_button_radius: 4px
+apply_button_size: 13px
+apply_button_hover_color: var(--primary-color)
 
-# Status text styling
-show_status_text: true # Show or hide status text line
-status_text_color: var(--secondary-text-color) # Status text color
-status_text_size: 12px # Status text size
-status_text_padding: 8px 16px # Status text padding
-status_text_weight: normal # Status text weight
-
-# Tooltip & hover line styling
-tooltip_bg_color: rgba(248, 11, 248, 0.9) # Tooltip background
-tooltip_text_color: "#ffffff" # Tooltip text color
-tooltip_border_color: rgba(255,255,255,0.2) # Tooltip border color
-hover_line_color: rgba(120,120,120,0.8) # Vertical hover line color
-
-# Download options
-download_theme: dark # Download theme: 'light' or 'dark' (default: dark/transparent)
-download_format: svg # Download format: png, svg, jpeg, webp
-download_filename: timescale_chart # Download filename
-download_width: 1200 # Download width in pixels
-download_height: 600 # Download height in pixels
-download_scale: 2 # Download scale (higher = better quality)
-
-# Auto-refresh
-auto_refresh: 300 # Auto-refresh interval in seconds (0 = disabled)
 
 # --- Multiple entities example ---
 # type: custom:timescale-plotly-card
