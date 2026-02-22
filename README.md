@@ -21,7 +21,7 @@ A custom Lovelace card for Home Assistant that displays Timescale database histo
 
 ## Requirements
 
-> **Note:** The Timescale database Reader integration supports any TimescaleDB database. using the `ltss` table (from the [LTSS integration](https://github.com/freol35241/ltss)) and with [Scribe](https://github.com/jonathan-gatard/scribe). .
+> **Note:** The Timescale database Reader integration supports any TimescaleDB database. using the `ltss` table (from the [LTSS integration](https://github.com/freol35241/ltss)) and with [Scribe](https://github.com/jonathan-gatard/scribe). 
 See also the Timescale Database Reader [README](https://github.com/remmob/timescale_database_reader) 
 
 ## Installation
@@ -127,6 +127,8 @@ The toolbar in the top-right corner provides:
 | Option | Type | Default | Description |
 |--------|------|---------|-------------|
 | `downsample` | number | auto | Downsample interval in seconds. Auto: ~80 points |
+| `table` | string | integration default table | Override table/view name used by Timescale Database Reader |
+| `downsample_method` | string | `avg` | Downsample aggregation: `avg` or `last` |
 | `y_margin` | number | `5` | Y-axis margin above/below data values (bottom margin is 0 when min is between 0 and `y_margin`) |
 | `height` | number | `400` | Chart height in pixels |
 | `nan_as_zero` | boolean | `false` | Treat NaN values as 0 in the series |
@@ -136,7 +138,13 @@ The toolbar in the top-right corner provides:
 | `extend_edge_gaps` | boolean | `false` | Extend first/last known value to chart edges so lines can start/end without edge gaps |
 | `chart_type` | string | `line` | Chart type: `line` or `bar` |
 
+
+<br/><br/>
+This works without extra options; the chart will show all minute data as bars.
+
 `nan_as_zero`, `gap_drop_to_zero`, `gap_drop_min_points`, `connect_gaps`, and `extend_edge_gaps` can also be set per series in `entities`. If not set on a series, the global card-level value is used.
+
+Tip: for prefilled minute tables/views (for example `sensor_minute_ltss`), use `downsample_method: last` to preserve edge transitions (such as return to 0) inside each downsample bucket.
 
 ### Tooltip & Status Text
 
@@ -167,6 +175,8 @@ entities:
 | Option | Type | Description |
 |--------|------|-------------|
 | `sensor_id` | string | **Required**. Entity ID for this series |
+| `table` | string | Optional table/view override for this series |
+| `downsample_method` | string | Optional aggregation override: `avg` or `last` |
 | `name` | string | Series name in legend and tooltip |
 | `line_color` | string | Line color for this series |
 | `fill_color` | string | Fill color for this series |

@@ -473,6 +473,8 @@ class TimescalePlotlyCard extends HTMLElement {
             }
 
             const responses = await Promise.all(seriesConfigs.map(series => {
+                const selectedTable = series.table || this._config.table;
+                const configuredMethod = String(series.downsample_method || this._config.downsample_method || '').toLowerCase();
                 const msg = {
                     type: 'timescale/query',
                     sensor_id: series.sensor_id,
@@ -480,6 +482,14 @@ class TimescalePlotlyCard extends HTMLElement {
                     end: endTime.toISOString(),
                     downsample: downsample
                 };
+                if (selectedTable) {
+                    msg.table = selectedTable;
+                }
+                if (configuredMethod === 'avg' || configuredMethod === 'last') {
+                    msg.downsample_method = configuredMethod;
+                } else if (selectedTable && /(?:minute|aggregate)/i.test(String(selectedTable))) {
+                    msg.downsample_method = 'last';
+                }
                 if (series.entry_id || this._config.entry_id) {
                     msg.entry_id = series.entry_id || this._config.entry_id;
                 }
@@ -509,10 +519,11 @@ class TimescalePlotlyCard extends HTMLElement {
                 .filter(t => Number.isFinite(t));
             const offset = allTimes.length ? (Math.min(...allTimes) % downsampleMs) : (startTime.getTime() % downsampleMs);
 
-            const alignTime = (t) => Math.round((t - offset) / downsampleMs) * downsampleMs + offset;
+            const alignTimeFloor = (t) => Math.floor((t - offset) / downsampleMs) * downsampleMs + offset;
+            const alignTimeCeil = (t) => Math.ceil((t - offset) / downsampleMs) * downsampleMs + offset;
 
-            const startMs = alignTime(startTime.getTime());
-            const endMs = alignTime(endTime.getTime());
+            const startMs = alignTimeFloor(startTime.getTime());
+            const endMs = alignTimeCeil(endTime.getTime());
             const xBase = [];
             for (let t = startMs; t <= endMs; t += downsampleMs) {
                 xBase.push(new Date(t));
@@ -550,8 +561,9 @@ class TimescalePlotlyCard extends HTMLElement {
                 (response || []).forEach(d => {
                     const t = new Date(d.bucket || d.time || 0).getTime();
                     if (!Number.isFinite(t)) return;
-                    const key = alignTime(t);
-                    const raw = parseFloat(d.avg_state || d.state);
+                    const key = alignTimeFloor(t);
+                    const rawValue = d.avg_state ?? d.state;
+                    const raw = parseFloat(rawValue);
                     dataByTime.set(key, Number.isFinite(raw) ? raw : null);
                 });
 
@@ -561,7 +573,7 @@ class TimescalePlotlyCard extends HTMLElement {
                 });
 
                 const ySource = (() => {
-                    if (!extendEdgeGaps || yBase.length === 0) return yBase;
+                    if (gapDropToZero || !extendEdgeGaps || yBase.length === 0) return yBase;
                     const values = [...yBase];
                     const firstFinite = values.findIndex(v => Number.isFinite(v));
                     if (firstFinite === -1) return values;
