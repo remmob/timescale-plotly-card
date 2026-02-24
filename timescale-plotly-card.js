@@ -240,12 +240,13 @@ class TimescalePlotlyCard extends HTMLElement {
                 #axis-title-left,
                 #axis-title-right {
                     position: relative;
-                    top: ${this._config.axis_title_offset_y || '-18px'};
                 }
                 #axis-title-left {
+                    top: ${this._config.axis_title_offset_y_left || this._config.axis_title_offset_y || '-18px'};
                     left: ${this._config.axis_title_offset_left || '0px'};
                 }
                 #axis-title-right {
+                    top: ${this._config.axis_title_offset_y_right || this._config.axis_title_offset_y || '-18px'};
                     right: ${this._config.axis_title_offset_right || '0px'};
                 }
                 #legend {
@@ -294,7 +295,7 @@ class TimescalePlotlyCard extends HTMLElement {
                     width: auto !important;
                     padding: 0 !important;
                     box-shadow: none !important;
-                    z-index: 10000 !important;
+                    z-index: 10020 !important;
                 }
                         #chart .modebar {
                     position: relative !important;
@@ -344,7 +345,7 @@ class TimescalePlotlyCard extends HTMLElement {
                     font-size: 12px;
                     border: 1px solid ${this._config.tooltip_border_color || this._config.tooltip_border || 'rgba(255,255,255,0.2)'};
                     pointer-events: none;
-                    z-index: 10001;
+                    z-index: ${this._config.tooltip_z_index || '9998'};
                     white-space: nowrap;
                 }
                 .hover-overlay {
@@ -472,8 +473,9 @@ class TimescalePlotlyCard extends HTMLElement {
                 throw new Error('Each entry in entities must include sensor_id');
             }
 
-            const responses = await Promise.all(seriesConfigs.map(series => {
-                const selectedTable = series.table || this._config.table;
+            const queryJobs = seriesConfigs.map(series => {
+                const selectedTableRaw = series.table ?? this._config.table;
+                const selectedTable = typeof selectedTableRaw === 'string' ? selectedTableRaw.trim() : selectedTableRaw;
                 const configuredMethod = String(series.downsample_method || this._config.downsample_method || '').toLowerCase();
                 const msg = {
                     type: 'timescale/query',
@@ -490,14 +492,30 @@ class TimescalePlotlyCard extends HTMLElement {
                 } else if (selectedTable && /(?:minute|aggregate)/i.test(String(selectedTable))) {
                     msg.downsample_method = 'last';
                 }
-                if (series.entry_id || this._config.entry_id) {
-                    msg.entry_id = series.entry_id || this._config.entry_id;
+                const entryIdRaw = series.entry_id ?? this._config.entry_id;
+                const entryId = typeof entryIdRaw === 'string' ? entryIdRaw.trim() : entryIdRaw;
+                if (entryId) {
+                    msg.entry_id = entryId;
                 }
-                if (series.database || this._config.database) {
-                    msg.database = series.database || this._config.database;
+                const databaseRaw = series.database ?? this._config.database;
+                const database = typeof databaseRaw === 'string' ? databaseRaw.trim() : databaseRaw;
+                if (database) {
+                    msg.database = database;
                 }
-                return this._hass.connection.sendMessagePromise(msg);
-            }));
+                return this._hass.connection.sendMessagePromise(msg)
+                    .catch((error) => {
+                        const detail = [
+                            `sensor_id=${series.sensor_id}`,
+                            database ? `database=${database}` : null,
+                            selectedTable ? `table=${selectedTable}` : null,
+                            entryId ? `entry_id=${entryId}` : null
+                        ].filter(Boolean).join(', ');
+                        const reason = error?.message || String(error);
+                        throw new Error(`${reason} (${detail})`);
+                    });
+            });
+
+            const responses = await Promise.all(queryJobs);
 
             const totalPoints = responses.reduce((sum, resp) => sum + (Array.isArray(resp) ? resp.length : 0), 0);
             if (totalPoints === 0) {
@@ -746,12 +764,31 @@ class TimescalePlotlyCard extends HTMLElement {
                 if (text.toLowerCase() === 'nan') return '';
                 return text;
             };
+            const hasOwnConfigValue = (key) => Object.prototype.hasOwnProperty.call(this._config, key);
+            const inferAxisTitleFromSeries = (axisSeries) => {
+                if (!Array.isArray(axisSeries) || axisSeries.length === 0) return '';
+                if (axisSeries.length === 1) {
+                    return normalizeTitle(axisSeries[0]?.unitValue || axisSeries[0]?.name || '');
+                }
+                const uniqueUnits = [...new Set(
+                    axisSeries
+                        .map(series => normalizeTitle(series?.unitValue))
+                        .filter(Boolean)
+                )];
+                return uniqueUnits.length === 1 ? uniqueUnits[0] : '';
+            };
+            const resolveAxisTitle = (configKeys, fallbackTitle) => {
+                const keys = Array.isArray(configKeys) ? configKeys : [configKeys];
+                for (const key of keys) {
+                    if (hasOwnConfigValue(key)) {
+                        return normalizeTitle(this._config[key]);
+                    }
+                }
+                return fallbackTitle;
+            };
             const axisTitlePosition = String(this._config.yaxis_title_position || 'top').toLowerCase();
-            const leftAxisTitle = normalizeTitle(this._config.yaxis_title_left)
-                || normalizeTitle(this._config.yaxis_title)
-                || (leftSeries.length === 1 ? normalizeTitle(leftSeries[0]?.unitValue || leftSeries[0]?.name || '') : '');
-            const rightAxisTitle = normalizeTitle(this._config.yaxis_title_right)
-                || (rightSeries.length === 1 ? normalizeTitle(rightSeries[0]?.unitValue || rightSeries[0]?.name || '') : '');
+            const leftAxisTitle = resolveAxisTitle(['yaxis_title_left', 'yaxis_title'], inferAxisTitleFromSeries(leftSeries));
+            const rightAxisTitle = resolveAxisTitle('yaxis_title_right', inferAxisTitleFromSeries(rightSeries));
 
             if (axisTitlesEl && axisTitleLeftEl && axisTitleRightEl) {
                 const showTopTitles = axisTitlePosition === 'top' && (leftAxisTitle || rightAxisTitle);
@@ -907,7 +944,7 @@ class TimescalePlotlyCard extends HTMLElement {
                     modebarContainer.style.width = 'fit-content';
                     modebarContainer.style.padding = '0';
                     modebarContainer.style.boxShadow = 'none';
-                    modebarContainer.style.zIndex = '10001';
+                    modebarContainer.style.zIndex = '10020';
                 }
 
                 if (modebar) {
