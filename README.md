@@ -19,6 +19,67 @@ A custom Lovelace card for Home Assistant that displays Timescale database histo
 - 🎯 Crosshair and hover tooltips
 - 📈 Auto-scaling Y-axis with configurable margins
 
+<!-- BEGIN:ENERGY-SELECTOR-HIGHLIGHT -->
+## ⚡ Quick Highlight: Energy Selector Changes (remove block if needed)
+
+This block is intentionally marked so it can be removed easily later.
+
+### What changed
+- In energy mode, `week`, `month`, and `year` are selection controls.
+- `year` shows `2020` → current year (auto-adds new year automatically).
+- `month` and `week` follow the selected year.
+- `custom` is controlled per card by one property: `show_custom_button`.
+
+### New/updated options
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `energy_time_ranges` | list | `[today, week, month, year, custom]` | Time controls used in energy mode |
+| `show_custom_button` | boolean | `true` | Show/hide Custom (works per card, also in energy mode) |
+| `select_background_color` | string | button bg | Background of year/month/week select controls |
+| `select_border_color` | string | button border | Border color of select controls |
+| `select_text_color` | string | button text | Text color of select controls |
+| `select_active_background_color` | string | active button bg | Active select background |
+| `select_active_border_color` | string | active button border | Active select border |
+| `select_active_text_color` | string | active button text | Active select text |
+| `select_option_background_color` | string | select bg | Dropdown option background |
+| `select_option_text_color` | string | select text | Dropdown option text |
+| `select_label_color` | string | button text | Color of selector labels (e.g. Jaar/Maand/Week) |
+| `show_bar_values` | boolean | `true` | Show value labels on energy bar charts (0-values stay hidden by default) |
+| `bar_value_position` | string | `inside` | Position of bar value labels: `inside` or `outside` |
+| `bar_value_decimals` | number | `2` | Number of decimals in bar value labels |
+| `bar_value_min_width_px` | number | `28` | Minimum bar width for horizontal label; otherwise vertical |
+| `bar_value_font_size` | number | `11` | Bar value label font size |
+| `bar_value_text_color` | string | `bar_value_font_color` | Preferred bar value label text color alias |
+| `bar_value_font_color` | string | `font_color` | Bar value label text color |
+| `totals_decimals` | number | `bar_value_decimals` | Decimals used in totals boxes |
+| `series_total_box_width` | string | `108px` | Fixed width of each totals box |
+
+### Example (energy)
+```yaml
+type: custom:timescale-plotly-card
+title: Energie
+energy_mode: true
+time_mode: energy_calendar
+default_range: today
+energy_time_ranges: [today, week, month, year]
+show_custom_button: false
+
+show_bar_values: true
+bar_value_position: inside
+bar_value_text_color: var(--primary-text-color)
+totals_decimals: 2
+series_total_box_width: 108px
+
+select_background_color: var(--primary-background-color)
+select_text_color: var(--primary-text-color)
+
+entities:
+   - sensor_id: sensor.energy_hourly
+      daily: sensor.energy_daily
+      monthly: sensor.energy_monthly
+```
+<!-- END:ENERGY-SELECTOR-HIGHLIGHT -->
+
 ## Requirements
 
 > **Note:** The Timescale database Reader integration supports any TimescaleDB database. using the `ltss` table (from the [LTSS integration](https://github.com/freol35241/ltss)) and with [Scribe](https://github.com/jonathan-gatard/scribe). 
@@ -122,6 +183,56 @@ The toolbar in the top-right corner provides:
 | `show_custom_button` | boolean | `true` | Show or hide the Custom range button (optional if `custom` is omitted from `time_ranges`) |
 | `auto_refresh` | number | `300` | Auto-refresh interval in seconds (0 = disabled) |
 
+### Cross-Card Sync (Optional)
+
+If you do not use sync, do nothing. Without `sync_group`, behavior stays exactly the same as before.
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `sync_group` | string | unset | Group name used to sync time/range state between cards |
+| `sync_mode` | string | `both` | Sync role: `master`, `follower`, `both`, `off` |
+| `sync_role` | string | `both` | Alias of `sync_mode` |
+
+Example master/follower setup:
+
+```yaml
+type: custom:timescale-plotly-card
+title: Energie master
+sync_group: energie_sync
+sync_mode: master
+show_time_selector: true
+```
+
+```yaml
+type: custom:timescale-plotly-card
+title: Energie follower
+sync_group: energie_sync
+sync_mode: follower
+show_time_selector: false
+```
+
+### Energy Calendar Mode
+
+Energy calendar mode can be enabled with either `energy_mode: true` or `time_mode: energy_calendar`.
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `time_mode` | string | unset | Set to `energy_calendar` to enable energy calendar behavior |
+| `energy_mode` | boolean | `false` | Alternative way to enable energy calendar mode |
+| `energy_time_ranges` | list | `[today,month,year,week,years,custom]` | Selector options in energy mode |
+| `energy_year` | number | current year | Initial selected year |
+| `energy_month` | number | current month | Initial selected month |
+| `energy_day` | number | current day | Initial selected day |
+| `energy_week` | number | current ISO week | Initial selected week |
+| `energy_bucket` | string | `1h` | Bucket size for `today`/fixed views (`m`, `h`, `d`, for example `15m`, `1h`, `1d`) |
+| `energy_week_start` | number | `1` | Start of week (`0`=Sunday, `1`=Monday, ... `6`=Saturday) |
+| `energy_years_count` | number | `8` | Number of years in `years` range |
+| `energy_years_offset` | number | `0` | Offset for `years` range window |
+| `energy_downsample` | number | auto | Query downsample override in energy mode |
+| `energy_source_type` | string | auto | `delta` or `cumulative` interpretation for energy values |
+| `energy_cumulative_mode` | string | `last` | Cumulative handling mode |
+| `energy_handle_reset` | boolean | `true` | Handle counter reset behavior in cumulative sources |
+
 ### Data Options
 
 | Option | Type | Default | Description |
@@ -137,6 +248,14 @@ The toolbar in the top-right corner provides:
 | `connect_gaps` | boolean | `false` | Connect gaps to keep a continuous line (ignored if `gap_drop_to_zero` is true) |
 | `extend_edge_gaps` | boolean | `false` | Extend first/last known value to chart edges so lines can start/end without edge gaps |
 | `chart_type` | string | `line` | Chart type: `line` or `bar` |
+| `show_bar_values` | boolean | `true` | Show value labels on bar charts (0-values stay hidden by default) |
+| `bar_value_position` | string | `inside` | Label position for bar values: `inside` or `outside` |
+| `bar_value_decimals` | number | `2` | Number of decimals shown in bar labels |
+| `bar_value_min_width_px` | number | `28` | Minimum bar width for horizontal label (else vertical) |
+| `bar_value_font_size` | number | `11` | Bar label font size |
+| `bar_value_text_color` | string | `bar_value_font_color` | Preferred bar label text color alias |
+| `bar_value_font_color` | string | `font_color` | Bar label text color |
+| `totals_decimals` | number | `bar_value_decimals` | Decimals used in totals boxes |
 
 
 <br/><br/>
@@ -187,6 +306,7 @@ entities:
 | `tooltip_label_text` | string | Tooltip label override for this series |
 | `yaxis` | string | `left` or `right` (use `right` for separate scale) |
 | `type` | string | `line` or `bar` for this series |
+| `show_total_box` | boolean | Show/hide this series in totals boxes row (default: `true`) |
 | `nan_as_zero` | boolean | Override NaN-to-zero handling for this series (falls back to global setting) |
 | `gap_drop_to_zero` | boolean | Override gap drop-to-zero behavior for this series (falls back to global setting) |
 | `gap_drop_min_points` | number | Override minimum consecutive missing points before dropping to 0 (falls back to global setting) |
@@ -260,6 +380,16 @@ entities:
 | `button_hover_text_color` | string | button_text_color | Hover text color |
 | `button_active_color` | string | primary color | Active button background/border |
 | `button_active_text_color` | string | `white` | Active button text color |
+| `select_background_color` | string | button_background_color | Background for energy select controls |
+| `select_border_color` | string | button_border_color | Border for energy select controls |
+| `select_text_color` | string | button_text_color | Text color for energy select controls |
+| `select_active_background_color` | string | button_active_color | Active background for energy select controls |
+| `select_active_border_color` | string | button_active_color | Active border for energy select controls |
+| `select_active_text_color` | string | button_active_text_color | Active text for energy select controls |
+| `select_option_background_color` | string | select_background_color | Dropdown option background |
+| `select_option_text_color` | string | select_text_color | Dropdown option text color |
+| `select_label_color` | string | button_text_color | Selector label color |
+| `series_total_box_width` | string | `108px` | Fixed width of each totals box |
 
 ### Custom Range Styling
 
@@ -346,6 +476,16 @@ entities:
 | `button_text_color` | string | `var(--primary-text-color)` | Button text color |
 | `button_active_color` | string | `var(--primary-color)` | Active button color |
 | `button_radius` | string | `4px` | Button border radius |
+| `select_background_color` | string | `button_background_color` | Energy select background |
+| `select_border_color` | string | `button_border_color` | Energy select border |
+| `select_text_color` | string | `button_text_color` | Energy select text color |
+| `select_active_background_color` | string | `button_active_color` | Active energy select background |
+| `select_active_border_color` | string | `button_active_color` | Active energy select border |
+| `select_active_text_color` | string | `button_active_text_color` | Active energy select text |
+| `select_option_background_color` | string | `select_background_color` | Energy dropdown option background |
+| `select_option_text_color` | string | `select_text_color` | Energy dropdown option text color |
+| `select_label_color` | string | `button_text_color` | Energy selector label color |
+| `series_total_box_width` | string | `108px` | Fixed width of each totals box |
 
 ### Modebar Styling
 
