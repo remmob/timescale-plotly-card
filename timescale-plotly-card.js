@@ -262,6 +262,16 @@ class TimescalePlotlyCard extends HTMLElement {
      */
     connectedCallback() {
         this.registerSyncListener();
+        // Reload data and title when Lovelace navigates to this view with a different entity
+        this._navHandler = () => {
+            if (this._initialized && new URLSearchParams(window.location.search).get('entity')) {
+                const root = this.shadowRoot || this;
+                const titleEl = root.querySelector('.card-header');
+                if (titleEl) titleEl.textContent = this.resolveTemplateValue(this._config.title);
+                this.loadData();
+            }
+        };
+        window.addEventListener('location-changed', this._navHandler);
         // Start auto-refresh when element is added to DOM
         const refreshSeconds = this._config.auto_refresh || 300;  // Default 5 minutes
         if (refreshSeconds > 0) {
@@ -279,6 +289,10 @@ class TimescalePlotlyCard extends HTMLElement {
      */
     disconnectedCallback() {
         this.unregisterSyncListener();
+        // Cleanup navigation listener
+        if (this._navHandler) {
+            window.removeEventListener('popstate', this._navHandler);
+        }
         // Cleanup auto-refresh when element is removed
         if (this._refreshInterval) {
             clearInterval(this._refreshInterval);
@@ -292,6 +306,115 @@ class TimescalePlotlyCard extends HTMLElement {
             this._initialized = true;
             this.render();
         }
+    }
+
+    isJsTemplateString(value) {
+        if (typeof value !== 'string') return false;
+        const text = value.trim();
+        return text.startsWith('[[[') && text.endsWith(']]]');
+    }
+
+    getQueryParamValue(paramName) {
+        if (!paramName) return '';
+        try {
+            const browserUrl = window?.location?.href;
+            if (browserUrl) {
+                const value = new URL(browserUrl).searchParams.get(paramName);
+                if (value !== null) return value;
+            }
+        } catch (_err) { }
+
+        try {
+            const hassUrl = this._hass?.connection?.url;
+            if (hassUrl) {
+                const parsed = hassUrl instanceof URL
+                    ? hassUrl
+                    : new URL(String(hassUrl), window?.location?.origin || 'http://localhost');
+                const value = parsed.searchParams.get(paramName);
+                if (value !== null) return value;
+            }
+        } catch (_err) { }
+
+        return '';
+    }
+
+    getFriendlyNameForEntity(entityId) {
+        if (!entityId || typeof entityId !== 'string') return '';
+        const stateObj = this._hass?.states?.[entityId];
+        const friendlyName = stateObj?.attributes?.friendly_name;
+        if (friendlyName && String(friendlyName).trim()) return String(friendlyName);
+        return entityId;
+    }
+
+    sanitizeFilename(text) {
+        const value = String(text || '').trim();
+        if (!value) return 'timescale_chart';
+        return value
+            .replace(/[\\/:*?"<>|]+/g, '_')
+            .replace(/\s+/g, '_')
+            .replace(/_+/g, '_')
+            .replace(/^_+|_+$/g, '') || 'timescale_chart';
+    }
+
+    resolveDownloadFilename(value) {
+        const resolved = this.resolveTemplateValue(value);
+        return this.sanitizeFilename(resolved);
+    }
+
+    resolveEntityIdFromTemplateBody(templateBody) {
+        const fallbackMatch = templateBody.match(/searchParams\.get\((['"`])([^'"`]+)\1\)\s*(?:\|\||\?\?)\s*(['"`])([^'"`]+)\3/);
+        if (fallbackMatch) {
+            const queryValue = this.getQueryParamValue(fallbackMatch[2]);
+            return queryValue && queryValue.trim() ? queryValue : fallbackMatch[4];
+        }
+
+        const queryMatch = templateBody.match(/searchParams\.get\((['"`])([^'"`]+)\1\)/);
+        if (queryMatch) {
+            return this.getQueryParamValue(queryMatch[2]);
+        }
+
+        return '';
+    }
+
+    resolveTemplateValue(value) {
+        if (!this.isJsTemplateString(value)) return value;
+        if (!this._hass) return value;
+
+        const text = value.trim();
+        const templateBody = text.slice(3, -3).trim();
+
+        // Safe parser: supports templates like
+        // [[[ return hass?.connection?.url.searchParams.get("entity") ]]]
+        const friendlyFromQueryMatch = templateBody.match(/states\?\.\[\s*[^\]]*searchParams\.get\((['"`])([^'"`]+)\1\)[^\]]*\]\?\.(?:attributes\?\.)?friendly_name/i);
+        if (friendlyFromQueryMatch) {
+            const entityId = this.resolveEntityIdFromTemplateBody(templateBody);
+            return this.getFriendlyNameForEntity(entityId);
+        }
+
+        const entityId = this.resolveEntityIdFromTemplateBody(templateBody);
+        if (entityId) {
+            return entityId;
+        }
+
+        // Keep backward compatibility: unknown template syntax falls back to plain text.
+        return value;
+    }
+
+    resolveEntityConfigTemplates(entityConfig) {
+        if (typeof entityConfig === 'string') {
+            return this.resolveTemplateValue(entityConfig);
+        }
+        if (!entityConfig || typeof entityConfig !== 'object') {
+            return entityConfig;
+        }
+
+        const resolved = { ...entityConfig };
+        ['sensor_id', 'entity', 'daily', 'monthly', 'yearly'].forEach((key) => {
+            if (typeof resolved[key] === 'string') {
+                resolved[key] = this.resolveTemplateValue(resolved[key]);
+            }
+        });
+        return resolved;
     }
 
     isEnergyCalendarMode() {
@@ -736,6 +859,32 @@ class TimescalePlotlyCard extends HTMLElement {
                     flex-wrap: wrap;
                     padding: 8px 16px 4px 16px;
                 }
+                .ts-data-table-container {
+                    overflow-x: auto;
+                    padding: 8px 16px;
+                }
+                .ts-data-table {
+                    border-collapse: collapse;
+                    width: 100%;
+                    font-size: 13px;
+                    color: var(--primary-text-color, #e1e1e1);
+                }
+                .ts-data-table th, .ts-data-table td {
+                    padding: 6px 10px;
+                    border: 1px solid rgba(128,128,128,0.3);
+                    text-align: right;
+                    white-space: nowrap;
+                }
+                .ts-data-table th {
+                    background: rgba(255,255,255,0.05);
+                    font-weight: 600;
+                }
+                .ts-data-table tr:nth-child(even) td {
+                    background: rgba(255,255,255,0.03);
+                }
+                .ts-data-table td:first-child, .ts-data-table th:first-child {
+                    text-align: left;
+                }
                 .series-total-box {
                     padding: 6px 12px;
                     background: ${this._config.button_background_color || this._config.button_color || 'var(--primary-background-color, #2b2b2b)'};
@@ -901,10 +1050,11 @@ class TimescalePlotlyCard extends HTMLElement {
                 }
       </style>
       <ha-card>
-        <div class="card-header">${this._config.title || 'TimescaleDB'}</div>
+        <div class="card-header">${this.resolveTemplateValue(this._config.title) || 'TimescaleDB'}</div>
         <div class="card-content timescale-content">
           ${timeSelectorHTML}
                     <div id="series-totals" class="series-totals" style="display:none;"></div>
+                    <div id="data-table-container" class="ts-data-table-container" style="display:none;"></div>
           <div id="status">Loading data...</div>
                     <div id="axis-titles"><span id="axis-title-left"></span><span id="axis-title-right"></span></div>
                     <div id="legend"></div>
@@ -1201,7 +1351,88 @@ class TimescalePlotlyCard extends HTMLElement {
             if (statusEl) {
                 statusEl.style.display = showStatusText ? '' : 'none';
             }
-            if (!window.Plotly) {
+            const showTable = this._config.show_table === true;
+            const showChart = this._config.show_chart !== false;
+            const tableContainerEl = root.querySelector('#data-table-container');
+            const escapeHtml = (value) => String(value)
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#39;');
+            const renderDataTable = (responses, seriesConfigs) => {
+                if (!tableContainerEl) return;
+                if (!showTable) {
+                    tableContainerEl.style.display = 'none';
+                    tableContainerEl.innerHTML = '';
+                    return;
+                }
+
+                let rows = [];
+                responses.forEach((responseRows, idx) => {
+                    const series = seriesConfigs[idx] || {};
+                    const seriesName = series.name || series.sensor_id || `series_${idx + 1}`;
+                    (Array.isArray(responseRows) ? responseRows : []).forEach((row) => {
+                        rows.push({ series: seriesName, ...row });
+                    });
+                });
+
+                if (!rows.length) {
+                    tableContainerEl.style.display = 'block';
+                    tableContainerEl.innerHTML = '<div class="ts-data-table-empty">No table data</div>';
+                    return;
+                }
+
+                const preferredOrder = ['series', 'time', 'bucket', 'entity_id', 'state', 'value', 'avg_state', 'min_state', 'max_state'];
+                const allKeys = [...new Set(rows.flatMap((row) => Object.keys(row)))];
+                const selectedColumnsRaw = this._config.table_columns;
+                let columns = Array.isArray(selectedColumnsRaw) && selectedColumnsRaw.length
+                    ? selectedColumnsRaw.map((col) => String(col))
+                    : preferredOrder.filter((key) => allKeys.includes(key));
+                const remaining = allKeys.filter((key) => !columns.includes(key));
+                columns = [...columns, ...remaining];
+
+                const limitRaw = this._config.table_limit;
+                const tableLimit = Number.isFinite(Number(limitRaw)) && Number(limitRaw) > 0
+                    ? Math.floor(Number(limitRaw))
+                    : 200;
+                const sortedRows = rows.slice().sort((a, b) => {
+                    const ta = new Date(a.time || a.bucket || 0).getTime();
+                    const tb = new Date(b.time || b.bucket || 0).getTime();
+                    return tb - ta;
+                }).slice(0, tableLimit);
+
+                const headerHtml = columns.map((col) => `<th>${escapeHtml(col)}</th>`).join('');
+                const bodyHtml = sortedRows.map((row) => {
+                    const cells = columns.map((col) => {
+                        const value = row[col];
+                        if (value === null || value === undefined) return '<td></td>';
+                        if (col === 'time' || col === 'bucket') {
+                            const dt = new Date(value);
+                            return `<td>${Number.isFinite(dt.getTime()) ? escapeHtml(dt.toLocaleString()) : escapeHtml(value)}</td>`;
+                        }
+                        return `<td>${escapeHtml(value)}</td>`;
+                    }).join('');
+                    return `<tr>${cells}</tr>`;
+                }).join('');
+
+                tableContainerEl.innerHTML = `<table class="ts-data-table"><thead><tr>${headerHtml}</tr></thead><tbody>${bodyHtml}</tbody></table>`;
+                tableContainerEl.style.display = 'block';
+            };
+
+            if (chartEl) {
+                chartEl.style.display = showChart ? '' : 'none';
+            }
+            if (!showChart) {
+                clearCurrentPlot();
+                const totalsEl = root.querySelector('#series-totals');
+                if (totalsEl) {
+                    totalsEl.style.display = 'none';
+                    totalsEl.innerHTML = '';
+                }
+            }
+
+            if (showChart && !window.Plotly) {
                 if (showStatusText) {
                     statusEl.textContent = 'Loading Plotly...';
                 }
@@ -1256,15 +1487,15 @@ class TimescalePlotlyCard extends HTMLElement {
             // --- Entity mapping per tijdsresolutie ---
             const selectedRangeRaw = String(this._selectedRange || 'today').toLowerCase();
             const selectedRange = selectedRangeRaw === 'day' ? 'today' : selectedRangeRaw;
-            const entitiesRaw = Array.isArray(this._config.entities) && this._config.entities.length
+            const entitiesRaw = (Array.isArray(this._config.entities) && this._config.entities.length
                 ? this._config.entities
                 : [{
-                    sensor_id: this._config.sensor_id,
-                    entity: this._config.entity,
-                    daily: this._config.daily,
-                    monthly: this._config.monthly,
-                    yearly: this._config.yearly
-                }];
+                    sensor_id: this.resolveTemplateValue(this._config.sensor_id),
+                    entity: this.resolveTemplateValue(this._config.entity),
+                    daily: this.resolveTemplateValue(this._config.daily),
+                    monthly: this.resolveTemplateValue(this._config.monthly),
+                    yearly: this.resolveTemplateValue(this._config.yearly)
+                }]).map((entry) => this.resolveEntityConfigTemplates(entry));
             // mappedEntities: altijd objecten met geldige sensor_id
             const mappedEntities = entitiesRaw.map(e => {
                 let entityObj = (typeof e === 'string') ? { sensor_id: e } : { ...e };
@@ -1329,12 +1560,18 @@ class TimescalePlotlyCard extends HTMLElement {
                 const queryTimeoutRaw = series.query_timeout_ms ?? this._config.query_timeout_ms ?? 20000;
                 const queryTimeoutMs = Number(queryTimeoutRaw);
                 const sensorLooksDaily = /_daily$/i.test(String(series.sensor_id || ''));
+                const sensorLooksYearly = /_yearly$/i.test(String(series.sensor_id || ''));
                 const useDailyProjectionQuery = energyMode
                     && (selectedRange === 'week' || selectedRange === 'month')
                     && (series._aggregate_boundary_shift === true || sensorLooksDaily);
-                const seriesDownsample = useDailyProjectionQuery
-                    ? Math.min(3600, Math.max(300, Number(downsample) || 900))
-                    : downsample;
+                const useRawForYearly = energyMode
+                    && selectedRange === 'years'
+                    && (series._aggregate_boundary_shift === true || sensorLooksYearly);
+                const seriesDownsample = useRawForYearly
+                    ? 0
+                    : useDailyProjectionQuery
+                        ? Math.min(3600, Math.max(300, Number(downsample) || 900))
+                        : downsample;
                 const msgBase = {
                     type: 'timescale/query',
                     sensor_id: series.sensor_id,
@@ -1435,6 +1672,7 @@ class TimescalePlotlyCard extends HTMLElement {
             showDebug(`Stap 5: backend antwoorden ontvangen (${responses.length} responses)`);
 
             const seriesConfigs = mappedEntities;
+            renderDataTable(responses, seriesConfigs);
 
             const totalPoints = responses.reduce((sum, resp) => sum + (Array.isArray(resp) ? resp.length : 0), 0);
             if (totalPoints === 0) {
@@ -1508,16 +1746,18 @@ class TimescalePlotlyCard extends HTMLElement {
                         cursor.setMonth(cursor.getMonth() + 1);
                     }
                 } else {
-                    const cursor = new Date(energyWindow.startTime.getFullYear(), 0, 1, 0, 0, 0, 0);
-                    while (cursor.getTime() <= endMs) {
-                        const start = cursor.getTime();
+                    let cursorYear = energyWindow.startTime.getFullYear();
+                    let cursorMs = Date.UTC(cursorYear, 0, 1, 0, 0, 0, 0);
+                    while (cursorMs <= endMs) {
+                        const start = cursorMs;
                         if (start >= startMs) {
-                            const next = new Date(cursor.getFullYear() + 1, 0, 1, 0, 0, 0, 0);
+                            const nextMs = Date.UTC(cursorYear + 1, 0, 1, 0, 0, 0, 0);
                             bucketStarts.push(start);
-                            bucketEnds.push(Math.min(endMs, next.getTime() - 1));
+                            bucketEnds.push(Math.min(endMs, nextMs - 1));
                             bucketFuture.push(start > nowMs);
                         }
-                        cursor.setFullYear(cursor.getFullYear() + 1);
+                        cursorYear++;
+                        cursorMs = Date.UTC(cursorYear, 0, 1, 0, 0, 0, 0);
                     }
                 }
 
@@ -1530,7 +1770,7 @@ class TimescalePlotlyCard extends HTMLElement {
                     const d = new Date(ms);
                     dayKeyToIndex.set(`${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`, idx);
                     monthKeyToIndex.set(`${d.getFullYear()}-${d.getMonth()}`, idx);
-                    yearKeyToIndex.set(`${d.getFullYear()}`, idx);
+                    yearKeyToIndex.set(`${d.getUTCFullYear()}`, idx);
                 });
 
                 const findBucketIndex = (timeMs) => {
@@ -1552,7 +1792,7 @@ class TimescalePlotlyCard extends HTMLElement {
                         return Number.isInteger(idx) ? idx : -1;
                     }
                     const d = new Date(timeMs);
-                    const idx = yearKeyToIndex.get(`${d.getFullYear()}`);
+                    const idx = yearKeyToIndex.get(`${d.getUTCFullYear()}`);
                     return Number.isInteger(idx) ? idx : -1;
                 };
 
@@ -1595,9 +1835,24 @@ class TimescalePlotlyCard extends HTMLElement {
                 const sensorIdShort = sensorId ? sensorId.split('.').pop() : undefined;
                 const friendlyName = stateObj?.attributes?.friendly_name;
                 const seriesName = seriesConfig.name || friendlyName || sensorIdShort || sensorId || `Series ${index + 1}`;
-                const valueLabel = seriesConfig.tooltip_label_text ?? this._config.tooltip_label_text;
+                const valueLabelRaw = seriesConfig.tooltip_label_text ?? this._config.tooltip_label_text;
+                const valueLabel = this.resolveTemplateValue(valueLabelRaw);
                 const labelText = valueLabel || seriesName || 'Value';
                 const formatValue = (val) => (Number.isFinite(val) ? Number(val).toFixed(2) : '—');
+
+                const stateMapRaw = seriesConfig.state_map || this._config.state_map;
+                const stateMap = stateMapRaw
+                    ? Object.fromEntries(Object.entries(stateMapRaw).map(([k, v]) => [String(k).toLowerCase(), Number(v)]))
+                    : null;
+                const resolveValue = (rawValue) => {
+                    const numeric = parseFloat(rawValue);
+                    if (Number.isFinite(numeric)) return numeric;
+                    if (stateMap && rawValue != null) {
+                        const mapped = stateMap[String(rawValue).toLowerCase()];
+                        if (Number.isFinite(mapped)) return mapped;
+                    }
+                    return NaN;
+                };
 
                 const formatEnergyBucketDate = (time, bucketMode) => {
                     const d = new Date(time);
@@ -1650,6 +1905,10 @@ class TimescalePlotlyCard extends HTMLElement {
                             return monthStartMs - 1;
                         }
                         if (energyContext.bucketMode === 'year' && d.getDate() === 1 && d.getMonth() === 0) {
+                            const sensorLooksYearly = /_yearly$/i.test(sensorIdText);
+                            if (sensorLooksYearly) {
+                                return pointTimeMs;
+                            }
                             const yearStartMs = new Date(d.getFullYear(), 0, 1, 0, 0, 0, 0).getTime();
                             return yearStartMs - 1;
                         }
@@ -1661,8 +1920,13 @@ class TimescalePlotlyCard extends HTMLElement {
                         .map(d => {
                             const sourceTime = new Date(d.bucket || d.time || 0).getTime();
                             const t = normalizeAggregateBoundaryTime(sourceTime);
-                            const rawValue = d.state ?? d.avg_state;
-                            const value = parseFloat(rawValue);
+                            // Prefer the numeric column. In a minute-aggregate table the
+                            // text state of a numeric sensor is a '0' placeholder and the
+                            // real number only lives in value/avg_state, so reading state
+                            // first flattens every bucket to zero. Only take the text state
+                            // first when a state_map has to translate it.
+                            const rawValue = stateMap ? (d.state ?? d.avg_state) : (d.avg_state ?? d.state);
+                            const value = resolveValue(rawValue);
                             return { t, value };
                         })
                         .filter(point => Number.isFinite(point.t) && Number.isFinite(point.value))
@@ -1741,8 +2005,8 @@ class TimescalePlotlyCard extends HTMLElement {
                         const t = new Date(d.bucket || d.time || 0).getTime();
                         if (!Number.isFinite(t)) return;
                         const key = alignTimeFloor(t);
-                        const rawValue = d.avg_state ?? d.state;
-                        const raw = parseFloat(rawValue);
+                        const rawValue = stateMap ? (d.state ?? d.avg_state) : (d.avg_state ?? d.state);
+                        const raw = resolveValue(rawValue);
                         dataByTime.set(key, Number.isFinite(raw) ? raw : null);
                     });
                     hasData = Array.from(dataByTime.values()).some(v => Number.isFinite(v));
@@ -1869,6 +2133,11 @@ class TimescalePlotlyCard extends HTMLElement {
                 const axisSideRaw = (seriesConfig.yaxis || seriesConfig.axis || 'left');
                 const axisSide = String(axisSideRaw).toLowerCase() === 'right' ? 'right' : 'left';
 
+                const binaryLabelsRaw = seriesConfig.binary_labels || this._config.binary_labels;
+                const binaryLabels = Array.isArray(binaryLabelsRaw) && binaryLabelsRaw.length >= 2
+                    ? binaryLabelsRaw
+                    : null;
+
                 return {
                     x,
                     y,
@@ -1887,14 +2156,17 @@ class TimescalePlotlyCard extends HTMLElement {
                     showTotalBox,
                     barValueTextColor,
                     gapDropToZero,
-                    connectGaps
+                    connectGaps,
+                    binaryLabels
                 };
             };
 
             const seriesData = seriesConfigs.map((seriesConfig, index) => buildSeries(seriesConfig, responses[index], index));
             const hasAnySeriesData = seriesData.some(series => series.hasData === true);
             if (!hasAnySeriesData) {
-                await renderNoDataGrid('No data');
+                if (showChart) {
+                    await renderNoDataGrid('No data');
+                }
                 if (showStatusText) {
                     statusEl.textContent = 'No data found';
                 }
@@ -1904,12 +2176,16 @@ class TimescalePlotlyCard extends HTMLElement {
             // Calculate automatic Y-axis range with margin
             const leftSeries = seriesData.filter(series => series.axisSide !== 'right');
             const rightSeries = seriesData.filter(series => series.axisSide === 'right');
+            const leftBinaryLabels = leftSeries.find(s => s.binaryLabels)?.binaryLabels || null;
+            const rightBinaryLabels = rightSeries.find(s => s.binaryLabels)?.binaryLabels || null;
             const leftYAll = leftSeries.flatMap(series => series.y || []);
             const rightYAll = rightSeries.flatMap(series => series.y || []);
             const allY = seriesData.flatMap(series => series.y || []);
             const finiteY = allY.filter(v => Number.isFinite(v));
             if (finiteY.length === 0) {
-                await renderNoDataGrid('No data');
+                if (showChart) {
+                    await renderNoDataGrid('No data');
+                }
                 if (showStatusText) {
                     statusEl.textContent = 'No valid data';
                 }
@@ -1984,8 +2260,11 @@ class TimescalePlotlyCard extends HTMLElement {
                         htmlParts.push('<div class="series-total-op">+</div>');
                     }
                 });
-                htmlParts.push('<div class="series-total-op">=</div>');
-                htmlParts.push(`<div class="series-total-box" style="color:${this._config.button_text_color || this._config.button_text || 'var(--primary-text-color, #e1e1e1)'};">${formatTotalValue(grandTotal)}${totalUnit ? ` ${totalUnit}` : ''}</div>`);
+                const showGrandTotal = !(this._config.show_grand_total === false || this._config.show_grand_total === 'false');
+                if (showGrandTotal) {
+                    htmlParts.push('<div class="series-total-op">=</div>');
+                    htmlParts.push(`<div class="series-total-box" style="color:${this._config.button_text_color || this._config.button_text || 'var(--primary-text-color, #e1e1e1)'};">${formatTotalValue(grandTotal)}${totalUnit ? ` ${totalUnit}` : ''}</div>`);
+                }
 
                 totalsEl.innerHTML = htmlParts.join('');
                 totalsEl.style.display = 'flex';
@@ -2034,11 +2313,13 @@ class TimescalePlotlyCard extends HTMLElement {
                 this._legendVisibility = seriesData.map((_, idx) => this._legendVisibility?.[idx] ?? true);
             }
 
+            const barIsHorizontal = String(this._config.bar_orientation || '').toLowerCase() === 'h';
             const traces = seriesData.map((series, index) => {
                 const chartType = String(series.chartType || 'line').toLowerCase();
                 const isBar = chartType === 'bar';
                 let marker;
                 if (isBar) {
+                    const configuredBarMode = String(this._config.bar_mode || this._config.barmode || (energyMode ? 'stack' : 'group')).toLowerCase();
                     marker = {
                         color: series.fillColor || series.lineColor,
                         line: {
@@ -2054,8 +2335,11 @@ class TimescalePlotlyCard extends HTMLElement {
                     };
                 }
                 const trace = {
-                    x: series.x,
-                    y: series.y,
+                    x: (isBar && barIsHorizontal) ? series.y : series.x,
+                    y: (isBar && barIsHorizontal) ? series.x : series.y,
+                    orientation: (isBar && barIsHorizontal) ? 'h' : undefined,
+                    hovertemplate: (isBar && barIsHorizontal) ? '<extra></extra>' : undefined,
+                    hoverinfo: (isBar && barIsHorizontal) ? 'none' : undefined,
                     type: isBar ? 'bar' : 'scatter',
                     mode: isBar ? undefined : 'lines+markers',
                     line: isBar ? undefined : {
@@ -2125,11 +2409,12 @@ class TimescalePlotlyCard extends HTMLElement {
                         font: { color: this._config.font_color || 'var(--primary-text-color, #e1e1e1)' },
                         standoff: 8
                     },
-                    range: leftRange ? [leftRange.yMin, leftRange.yMax] : undefined,
+                    range: leftBinaryLabels ? [-0.1, leftBinaryLabels.length - 1 + 0.1] : (leftRange ? [leftRange.yMin, leftRange.yMax] : undefined),
                     gridcolor: this._config.grid_color || 'rgba(128,128,128,0.2)',
                     ticklabelpadding: this._config.yaxis_tick_padding || 6,
                     ticklabelstandoff: this._config.yaxis_tick_padding || 6,
-                    automargin: true
+                    automargin: true,
+                    ...(leftBinaryLabels ? { tickmode: 'array', tickvals: leftBinaryLabels.map((_, i) => i), ticktext: leftBinaryLabels } : {})
                 },
                 annotations: annotations,
                 paper_bgcolor: this._config.paper_bgcolor || 'rgba(0,0,0,0)',
@@ -2152,6 +2437,7 @@ class TimescalePlotlyCard extends HTMLElement {
                     ? configuredBarMode
                     : 'group';
                 layout.bargap = this._config.bar_gap ?? (energyMode ? 0.05 : 0.15);
+                if (layout.barmode === 'group') layout.bargroupgap = this._config.bar_group_gap ?? 0.08;
 
                 const showBarValues = (this._config.show_bar_values ?? true) !== false;
                 if (showBarValues) {
@@ -2178,14 +2464,15 @@ class TimescalePlotlyCard extends HTMLElement {
                     };
 
                     barTraces.forEach((trace) => {
-                        trace.text = (trace.y || []).map((value) => {
+                        const _barValArr = barIsHorizontal ? (trace.x || []) : (trace.y || []);
+                        trace.text = _barValArr.map((value) => {
                             if (!Number.isFinite(value)) return '';
                             const formatted = formatBarValue(value);
                             return (formatted === '0' || formatted === '-0') ? '' : formatted;
                         });
                         trace.texttemplate = '%{text}';
                         trace.textposition = labelPosition;
-                        trace.textangle = useVerticalText ? -90 : 0;
+                        trace.textangle = (barIsHorizontal || !useVerticalText) ? 0 : -90;
                         trace.cliponaxis = labelPosition !== 'outside';
                         trace.textfont = {
                             size: Number(this._config.bar_value_font_size) || 11,
@@ -2207,42 +2494,58 @@ class TimescalePlotlyCard extends HTMLElement {
                 }
             }
 
-            if (rightRange) {
+            if (rightRange || rightBinaryLabels) {
                 layout.yaxis2 = {
                     title: {
                         text: axisTitlePosition === 'top' ? '' : (rightAxisTitle || ''),
                         font: { color: this._config.font_color || 'var(--primary-text-color, #e1e1e1)' },
                         standoff: 8
                     },
-                    range: [rightRange.yMin, rightRange.yMax],
+                    range: rightBinaryLabels ? [-0.1, rightBinaryLabels.length - 1 + 0.1] : (rightRange ? [rightRange.yMin, rightRange.yMax] : undefined),
                     overlaying: 'y',
                     side: 'right',
                     gridcolor: 'rgba(0,0,0,0)',
                     ticklabelpadding: this._config.yaxis_tick_padding || 6,
                     ticklabelstandoff: this._config.yaxis_tick_padding || 6,
-                    automargin: true
+                    automargin: true,
+                    ...(rightBinaryLabels ? { tickmode: 'array', tickvals: rightBinaryLabels.map((_, i) => i), ticktext: rightBinaryLabels } : {})
                 };
             }
 
-            await Plotly.newPlot(chartEl, traces, layout, {
-                responsive: false,
-                displayModeBar: this._config.show_modebar !== false,
-                displaylogo: false,
-                modeBarButtonsToRemove: ['lasso2d', 'select2d', 'pan2d', 'autoScale2d', 'toggleSpikelines', 'hoverClosestCartesian', 'hoverCompareCartesian'],
-                toImageButtonOptions: {
-                    format: downloadFormat,
-                    filename: this._config.download_filename || 'timescale_chart',
-                    height: this._config.download_height || 500,
-                    width: this._config.download_width || 700,
-                    scale: this._config.download_scale || 2,
-                    // Override background and font for download only
-                    paper_bgcolor: this._config.download_theme === 'light' ? 'white' : (this._config.download_theme === 'dark' ? 'rgba(0,0,0,0)' : (this._config.paper_bgcolor || 'rgba(0,0,0,0)')),
-                    plot_bgcolor: this._config.download_theme === 'light' ? '#f5f5f5' : (this._config.download_theme === 'dark' ? 'rgba(0,0,0,0)' : (this._config.plot_bgcolor || 'rgba(0,0,0,0)')),
-                    font: { color: this._config.download_theme === 'light' ? '#333' : (this._config.download_theme === 'dark' ? 'var(--primary-text-color, #e1e1e1)' : (this._config.font_color || 'var(--primary-text-color, #e1e1e1)')) }
-                }
-            });
+            if (hasBarTrace && barIsHorizontal) {
+                const _tmpAxis = layout.xaxis;
+                layout.xaxis = layout.yaxis;
+                layout.yaxis = _tmpAxis;
+                layout.hovermode = 'y';
+            }
+            if (showChart) {
+                await Plotly.newPlot(chartEl, traces, layout, {
+                    responsive: false,
+                    displayModeBar: this._config.show_modebar !== false,
+                    displaylogo: false,
+                    modeBarButtonsToRemove: ['lasso2d', 'select2d', 'pan2d', 'autoScale2d', 'toggleSpikelines', 'hoverClosestCartesian', 'hoverCompareCartesian'],
+                    toImageButtonOptions: {
+                        format: downloadFormat,
+                        filename: this.resolveDownloadFilename(this._config.download_filename),
+                        height: this._config.download_height || 500,
+                        width: this._config.download_width || 700,
+                        scale: this._config.download_scale || 2,
+                        // Override background and font for download only
+                        paper_bgcolor: this._config.download_theme === 'light' ? 'white' : (this._config.download_theme === 'dark' ? 'rgba(0,0,0,0)' : (this._config.paper_bgcolor || 'rgba(0,0,0,0)')),
+                        plot_bgcolor: this._config.download_theme === 'light' ? '#f5f5f5' : (this._config.download_theme === 'dark' ? 'rgba(0,0,0,0)' : (this._config.plot_bgcolor || 'rgba(0,0,0,0)')),
+                        font: { color: this._config.download_theme === 'light' ? '#333' : (this._config.download_theme === 'dark' ? 'var(--primary-text-color, #e1e1e1)' : (this._config.font_color || 'var(--primary-text-color, #e1e1e1)')) }
+                    }
+                });
 
-            updateSeriesTotals();
+                updateSeriesTotals();
+            }
+
+            if (!showChart) {
+                if (showStatusText) {
+                    statusEl.textContent = `${totalPoints} points (${downsample}s interval)`;
+                }
+                return;
+            }
 
             const applyModebarStyles = () => {
                 const modebar = chartEl.querySelector('.modebar');
@@ -2314,7 +2617,55 @@ class TimescalePlotlyCard extends HTMLElement {
                 if (!points.length) return;
 
                 const firstPoint = points[0];
-                const date = new Date(firstPoint.x || 0);
+
+                if (hasBarTrace && barIsHorizontal) {
+                    // Custom tooltip for horizontal bars:
+                    // pointIndex is the time-bucket index, same across all series.
+                    const ptIdx = firstPoint.pointIndex;
+                    // Find original Date from first series that has data at this index
+                    let _t = null;
+                    for (let si = 0; si < seriesData.length; si++) {
+                        const candidate = seriesData[si]?.x?.[ptIdx];
+                        if (candidate !== undefined && candidate !== null) { _t = candidate; break; }
+                    }
+                    if (_t === null) return;
+                    const formatted = new Date(_t).toLocaleString('nl-NL', {
+                        day: '2-digit', month: '2-digit', year: 'numeric',
+                        hour: '2-digit', minute: '2-digit'
+                    });
+                    // Collect all series values at this index
+                    const hLines = seriesData.map((s) => {
+                        const val = s?.y?.[ptIdx];
+                        const fVal = Number.isFinite(val) ? Number(val).toFixed(2) : '—';
+                        const unit = s?.unitValue ? ` ${s.unitValue}` : '';
+                        const color = s?.lineColor || 'currentColor';
+                        return `<span style="color:${color};">${s?.name || ''}</span>: <b>${fVal}${unit}</b>`;
+                    });
+                    tooltip.innerHTML = `<b>${formatted}</b><br>${hLines.join('<br>')}`;
+                    tooltip.style.display = 'block';
+                    const rect = chartEl.getBoundingClientRect();
+                    const clientX = eventData.event?.clientX ?? rect.left;
+                    const clientY = eventData.event?.clientY ?? rect.top;
+                    const { x: cx, y: cy } = clampTooltipPosition(
+                        clientX - rect.left + 12,
+                        clientY - rect.top - 10,
+                        rect
+                    );
+                    tooltip.style.left = `${cx}px`;
+                    tooltip.style.top = `${cy}px`;
+                    if (showStatusText) {
+                        statusEl.textContent = `${formatted} • ${seriesData.map((s, si) => {
+                            const val = s?.y?.[ptIdx];
+                            const fVal = Number.isFinite(val) ? Number(val).toFixed(2) : '—';
+                            const unit = s?.unitValue ? ` ${s.unitValue}` : '';
+                            return `${s?.name || ''}: ${fVal}${unit}`;
+                        }).join(' • ')}`;
+                    }
+                    return;
+                }
+
+                const _hoverRaw = firstPoint.x || 0;
+                const date = new Date(_hoverRaw);
                 const formatted = date.toLocaleString('nl-NL', {
                     day: '2-digit',
                     month: '2-digit',
@@ -2323,7 +2674,7 @@ class TimescalePlotlyCard extends HTMLElement {
                     minute: '2-digit'
                 });
 
-                const hoverTime = new Date(firstPoint.x || 0).getTime();
+                const hoverTime = new Date(_hoverRaw).getTime();
                 const lines = isMultiSeries
                     ? seriesData.map((series) => {
                         const pointValueRaw = getTooltipValueAtTime(series, hoverTime);
@@ -2345,8 +2696,15 @@ class TimescalePlotlyCard extends HTMLElement {
                 const rect = chartEl.getBoundingClientRect();
                 const clientX = eventData.event?.clientX ?? rect.left;
                 const clientY = eventData.event?.clientY ?? rect.top;
-                let xPos = clientX - rect.left + 10;
-                let yPos = clientY - rect.top - 10;
+                let xPos, yPos;
+                if (hasBarTrace && barIsHorizontal) {
+                    // For horizontal bars the time axis is Y; pin tooltip to the right of cursor, follow Y
+                    xPos = clientX - rect.left + 10;
+                    yPos = clientY - rect.top - 10;
+                } else {
+                    xPos = clientX - rect.left + 10;
+                    yPos = clientY - rect.top - 10;
+                }
                 const lineX = clientX - rect.left;
 
                 const clamped = clampTooltipPosition(xPos, yPos, rect);
@@ -2356,8 +2714,10 @@ class TimescalePlotlyCard extends HTMLElement {
                 tooltip.style.left = `${xPos}px`;
                 tooltip.style.top = `${yPos}px`;
 
-                hoverLine.style.display = 'block';
-                hoverLine.style.left = `${lineX}px`;
+                if (!(hasBarTrace && barIsHorizontal)) {
+                    hoverLine.style.display = 'block';
+                    hoverLine.style.left = `${lineX}px`;
+                }
 
                 if (showStatusText) {
                     statusEl.textContent = `${formatted} • ${lines.join(' • ').replace(/<[^>]*>/g, '')}`;
@@ -2365,8 +2725,10 @@ class TimescalePlotlyCard extends HTMLElement {
             });
 
             chartEl.on('plotly_unhover', () => {
-                tooltip.style.display = 'none';
-                hoverLine.style.display = 'none';
+                if (!(hasBarTrace && barIsHorizontal)) {
+                    tooltip.style.display = 'none';
+                    hoverLine.style.display = 'none';
+                }
                 if (showStatusText) {
                     statusEl.textContent = defaultStatus;
                 }
@@ -2433,15 +2795,63 @@ class TimescalePlotlyCard extends HTMLElement {
             };
 
             this._mouseMoveHandler = (evt) => {
-                const layout = chartEl._fullLayout;
-                if (!layout || !layout.xaxis || !x || x.length === 0) return;
+                const _fullLayout = chartEl._fullLayout;
+                if (!_fullLayout) return;
 
                 const rect = overlay.getBoundingClientRect();
                 const px = evt.clientX - rect.left;
                 const py = evt.clientY - rect.top;
 
-                const size = layout._size;
-                const xRange = layout.xaxis.range;
+                // Horizontal bars: time is on Y-axis
+                if (hasBarTrace && barIsHorizontal) {
+                    const yaxisLayout = _fullLayout.yaxis;
+                    if (!yaxisLayout || !yaxisLayout.range) return;
+                    const size = _fullLayout._size;
+                    if (!size) return;
+                    const yRange = yaxisLayout.range;
+                    const yStart = new Date(yRange[0]).getTime();
+                    const yEnd = new Date(yRange[1]).getTime();
+                    const clampedY = Math.min(Math.max(py - size.t, 0), size.h);
+                    const frac = size.h > 0 ? (1 - clampedY / size.h) : 0; // Y axis goes bottom→top in Plotly
+                    const targetTime = yStart + frac * (yEnd - yStart);
+
+                    const baseX = seriesData[0]?.x;
+                    if (!baseX || !baseX.length) return;
+                    const baseIndex = findNearestIndex(targetTime, baseX);
+                    const baseTime = baseX[baseIndex];
+                    if (!baseTime) return;
+
+                    const formatted = new Date(baseTime).toLocaleString('nl-NL', {
+                        day: '2-digit', month: '2-digit', year: 'numeric',
+                        hour: '2-digit', minute: '2-digit'
+                    });
+
+                    const tooltipLines = [];
+                    const statusParts = [];
+                    seriesData.forEach(s => {
+                        const val = s?.y?.[baseIndex];
+                        const fVal = Number.isFinite(val) ? Number(val).toFixed(2) : '—';
+                        const unit = s?.unitValue ? ` ${s.unitValue}` : '';
+                        const label = s?.name || '';
+                        const color = s?.lineColor || 'currentColor';
+                        tooltipLines.push(`<span style="color:${color}">${label}</span>: <b>${fVal}${unit}</b>`);
+                        statusParts.push(`${label}: ${fVal}${unit}`);
+                    });
+
+                    tooltip.innerHTML = `<b>${formatted}</b><br>${tooltipLines.join('<br>')}`;
+                    tooltip.style.display = 'block';
+                    const { x: cx, y: cy } = clampTooltipPosition(px + 12, py - 10, rect);
+                    tooltip.style.left = `${cx}px`;
+                    tooltip.style.top = `${cy}px`;
+                    if (showStatusText) statusEl.textContent = `${formatted} • ${statusParts.join(' • ')}`;
+                    return;
+                }
+
+                // Normal (vertical) mode
+                if (!_fullLayout.xaxis || !x || x.length === 0) return;
+
+                const size = _fullLayout._size;
+                const xRange = _fullLayout.xaxis.range;
                 if (!size || !Array.isArray(xRange) || xRange.length < 2) return;
                 if (xRange[0] == null || xRange[1] == null) return;
 

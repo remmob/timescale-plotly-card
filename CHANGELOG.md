@@ -1,5 +1,55 @@
 ## Changelog
 
+### 2.0.0 (2026-08-13)
+
+**Energy calendar mode**
+
+A new charting mode aligned to calendar boundaries instead of rolling hours,
+built for `utility_meter` style counters.
+
+- `energy_mode: true` (or `time_mode: energy_calendar`) switches the selector to
+  today / week / month / year / years, with year, month and week as dropdowns
+- Per series, `daily`, `monthly` and `yearly` name the entity to use for the
+  wider ranges; a `_hourly` entity resolves its `_daily` / `_monthly` sibling
+  automatically when one exists
+- `energy_source_type`, `energy_cumulative_mode` and `energy_handle_reset`
+  control how counters are read, inferred from `state_class` by default
+- Bar charts by default in this mode, with `bar_mode`, `bar_orientation`,
+  `bar_gap` and `bar_group_gap`
+- Totals row per series with a grand total: `show_grand_total`,
+  `show_total_box`, `totals_decimals`, `series_total_box_width`
+
+**Cross-card sync**
+
+- `sync_group` with `sync_mode: master` / `follower` / `both` / `off` lets one
+  selector drive several charts
+
+**Other additions**
+
+- `state_map` and `binary_labels` for text and binary entities
+- `show_table`, `table_columns` and `table_limit` to render the raw result
+- `show_chart: false` for a table-only card
+- Download options: `download_format`, `download_theme`, `download_width`,
+  `download_height`, `download_scale`, `download_filename`
+- `query_timeout_ms` and `max_query_span_seconds`; long ranges are chunked
+- `plotly_url` to load Plotly from somewhere other than the CDN
+- `show_debug_overlay` showing each loading step and the resolved query
+
+**Fixed**
+
+- Energy mode read the text `state` column before the numeric one. In a
+  prefilled minute table the text state of a numeric sensor is the placeholder
+  `'0'`, so every bucket resolved to zero and all bars rendered flat. It now
+  prefers the numeric column, matching the non-energy code path, and falls back
+  to `state` only when a `state_map` has to translate it.
+
+**Documentation**
+
+- README rewritten as a complete reference: every option the card reads is
+  documented, options that no longer exist (`days`, `refresh_interval`,
+  `show_toolbar`, `hover_bg_color`) removed, duplicated sections merged, and
+  aliases collected in one place
+
 ### 1.0.0 (2026-01-28)
 
 **Initial Release**
