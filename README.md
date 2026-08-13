@@ -53,7 +53,19 @@ plotly_url: /local/plotly-2.27.0.min.js
 2. Settings → Dashboards → Resources → add `/hacsfiles/timescale-plotly-card/timescale-plotly-card.js` as a JavaScript Module
 3. Hard-refresh the browser
 
-> When you replace the file by hand, bump the version query on the resource URL (`?v=20260813-01`). Browsers cache modules aggressively.
+### After every update
+
+**Hard-refresh the browser (Ctrl+Shift+R).** This applies to HACS updates too, not just manual ones. HACS replaces the file on disk, but the resource URL registered under Settings → Dashboards → Resources keeps whatever query string it already had — so the browser happily serves the version it cached under that unchanged URL, and you keep looking at the old card wondering why nothing changed.
+
+To stop having to think about it, put a version query on the resource URL and bump it whenever you update:
+
+```
+/hacsfiles/timescale-plotly-card/timescale-plotly-card.js?v=20260813-01
+```
+
+Settings → Dashboards → Resources → click the resource → change the `?v=` value → save. The changed URL is a different URL as far as the browser is concerned, so the new file is fetched without any cache clearing.
+
+If a change still does not show up, open the browser console: the card logs its version on load, which tells you immediately whether you are running the file you think you are.
 
 ---
 
@@ -500,8 +512,10 @@ cards:
 
 ## Troubleshooting
 
-### The card does not load
-Hard-refresh (Ctrl+Shift+R), check the browser console, and verify the resource is registered. When you replaced the file manually, bump the `?v=` on the resource URL.
+### The card does not load, or an update changed nothing
+Hard-refresh (Ctrl+Shift+R) and check the browser console — the card logs its version on load, so you can see straight away which file you are actually running. Verify the resource is registered under Settings → Dashboards → Resources.
+
+If the version in the console is still the old one after a HACS update, it is the resource URL: HACS replaced the file but the URL did not change, so the browser serves its cached copy. Bump the `?v=` on the resource URL. See [After every update](#after-every-update).
 
 ### No data at all
 1. Does `sensor_id` match an entity that the database actually records?
