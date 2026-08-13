@@ -1,15 +1,20 @@
 ## Changelog
 
-### 2.1.1 (2026-08-13)
+### 2.1.2 (2026-08-13)
 
-**Fixed**
+**Reverted**
 
-- The navigation listener was never removed. It is registered on
-  `location-changed` but `disconnectedCallback` removed it from `popstate`, so
-  every mount left another live handler behind. Each one calls `loadData()` on
-  every navigation, so a view that is navigated into repeatedly — a shared graph
-  template driven by `?entity=` — fired one extra query per past visit and got
-  progressively slower for the lifetime of the page.
+- 2.1.1 removed the navigation listener on disconnect. That listener is what
+  reloads a shared graph template when only the `?entity=` query string changes,
+  and removing it left such a view showing the previously selected entity. The
+  2.1.0 behaviour is restored.
+
+  The underlying issue 2.1.1 tried to solve is real — the listener is registered
+  on `location-changed` but was removed from `popstate`, so handlers accumulate
+  across remounts and each one calls `loadData()` on every navigation. Fixing it
+  needs the reload path reworked so it does not depend on a listener surviving
+  disconnect. Until then the leak is the lesser problem: a view that works and
+  gets slower beats a view that shows the wrong entity.
 
 ### 2.1.0 (2026-08-13)
 
