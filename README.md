@@ -178,7 +178,14 @@ Enable with `energy_mode: true` (or `time_mode: energy_calendar`). Ranges snap t
 | `energy_source_type` | `delta` \| `cumulative` | auto | How to read the values. Auto: `cumulative` when `state_class` is `total_increasing` |
 | `energy_cumulative_mode` | `last` \| `diff` | `last` | `last` takes the meter's end value per bucket (right for resetting `utility_meter`s), `diff` sums the increments |
 | `energy_handle_reset` | boolean | `true` | Treat a decrease as a counter reset in `diff` mode |
+| `energy_aggregate` | `sum` \| `last` \| `first` \| `avg` \| `min` \| `max` | auto | How several readings inside one bucket are combined. Overrides the inference above |
 | `hide_zero_values` | boolean | `true` | Hide zero-value bar labels |
+
+> **Charting something that is not additive?** Set `energy_aggregate: last`.
+>
+> Without it the card infers the mode from `state_class`: `total_increasing` means a counter (take the bucket's end value), anything else is treated as a delta and **summed**. That is right for energy, and wrong for a ratio. A COP or EER template sensor carries no `state_class`, so it falls into the delta branch. On the `today` range each bucket holds a single reading, so summing it changes nothing and the chart looks fine — but the `years` range queries raw rows, and a year of minute readings summed turns an EER of 5 into 2752.
+>
+> `last` takes the value at the end of the period, which is exactly what a running period ratio such as `sensor.yearly_eer_cooling` means. `avg` is the alternative if you want the mean over the bucket instead.
 
 In energy mode `year` / `month` / `week` become dropdowns rather than plain buttons; `year` runs from 2020 to the current year and grows by itself.
 
@@ -220,6 +227,7 @@ Every option below is per series and falls back to the card-level value.
 | `binary_labels` | list | Two or more labels to render a binary/state series on a labelled axis |
 | `state_map` | map | Translate text states to numbers, e.g. `{off: 0, on: 1}` |
 | `energy_source_type` / `energy_source` | string | Per-series `delta` / `cumulative` |
+| `energy_aggregate` | string | Per-series `sum` / `last` / `first` / `avg` / `min` / `max` |
 | `energy_cumulative_mode`, `energy_handle_reset` | | Per-series energy overrides |
 | `nan_as_zero`, `gap_drop_to_zero`, `gap_drop_min_points`, `connect_gaps`, `extend_edge_gaps` | | Per-series gap handling |
 | `hide_zero_values` | boolean | Per-series zero-label suppression |
@@ -531,6 +539,9 @@ Almost always a `state` / `value` mix-up. In Scribe's minute tables the text `st
 
 ### Counter bars look too low, and a value shows up one bucket late
 The prefilled minute table lags the continuous aggregate by a minute or two, so a `utility_meter` reset at `:00` lands a couple of minutes later. Every hourly bucket then samples the meter slightly too early. See "Keeping the minute table in step with reality" in the [reader README](https://github.com/remmob/timescale_database_reader).
+
+### A ratio explodes on the year or years range
+The card is summing it. Set `energy_aggregate: last` on that card or series — see [Energy calendar mode](#energy-calendar-mode). The give-away is that `today` looks right while the wider ranges do not: short buckets hold one reading each, so the sum equals it.
 
 ### An hourly ratio shows an absurd value
 Dividing two counters that both reset on the clock hour goes wrong when a cycle straddles the boundary: the tail of a run lands in the next period with almost no input energy against it. Guard the template that computes the ratio with a minimum energy per period and a plausible upper bound — this is not something the card can fix.

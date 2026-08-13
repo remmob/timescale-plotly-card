@@ -32,7 +32,7 @@ function resolveEntityForRange(entityConfig, range) {
  * @license MIT
  */
 
-console.info('%c TIMESCALE-PLOTLY-CARD %c 2.0.0 ', 'color: white; background: #03a9f4; font-weight: bold;', 'color: #03a9f4; background: white; font-weight: bold;');
+console.info('%c TIMESCALE-PLOTLY-CARD %c 2.1.0 ', 'color: white; background: #03a9f4; font-weight: bold;', 'color: #03a9f4; background: white; font-weight: bold;');
 
 /**
  * TimescalePlotlyCard Web Component
@@ -47,6 +47,11 @@ console.info('%c TIMESCALE-PLOTLY-CARD %c 2.0.0 ', 'color: white; background: #0
  */
 const TSCARD_VERSION = '2026-03-01-39';
 const TSCARD_SYNC_EVENT = 'timescale-plotly-card-sync';
+
+/* How several readings inside one energy bucket may be combined. Only used when
+   energy_aggregate is set explicitly; otherwise the mode is inferred from the
+   entity's state_class. */
+const ENERGY_AGGREGATES = new Set(['sum', 'last', 'first', 'avg', 'min', 'max']);
 
 function getTimescaleSyncStore() {
     if (!window.__timescalePlotlySyncState || typeof window.__timescalePlotlySyncState !== 'object') {
@@ -1936,7 +1941,47 @@ class TimescalePlotlyCard extends HTMLElement {
                     const useDailyProjection = (selectedRange === 'week' || selectedRange === 'month')
                         && (seriesConfig._aggregate_boundary_shift === true || sensorLooksDaily);
 
-                    if (useDailyProjection) {
+                    // Explicit override for how several readings inside one
+                    // bucket are combined. Without it the mode is inferred from
+                    // state_class, which is right for energy counters but wrong
+                    // for anything that is not additive: a COP or EER carries no
+                    // state_class, so it fell through to the delta branch and got
+                    // summed. Over a year of minute readings that turns a ratio
+                    // of 5 into a four-digit number.
+                    const bucketCounts = Array(energyContext.xBase.length).fill(0);
+                    const aggregateRaw = seriesConfig.energy_aggregate ?? this._config.energy_aggregate;
+                    const aggregate = String(aggregateRaw ?? '').toLowerCase();
+                    const explicitAggregate = ENERGY_AGGREGATES.has(aggregate) ? aggregate : null;
+
+                    if (explicitAggregate) {
+                        rawPoints.forEach(point => {
+                            const idx = energyContext.findBucketIndex(point.t);
+                            if (idx < 0 || idx >= bucketTotals.length) return;
+                            if (energyContext.futureAsNull && energyContext.bucketFuture[idx]) return;
+                            if (!bucketHasData[idx]) {
+                                bucketTotals[idx] = point.value;
+                                bucketHasData[idx] = true;
+                                bucketCounts[idx] = 1;
+                                return;
+                            }
+                            bucketCounts[idx] += 1;
+                            if (explicitAggregate === 'sum' || explicitAggregate === 'avg') {
+                                bucketTotals[idx] += point.value;
+                            } else if (explicitAggregate === 'last') {
+                                bucketTotals[idx] = point.value;
+                            } else if (explicitAggregate === 'max') {
+                                bucketTotals[idx] = Math.max(bucketTotals[idx], point.value);
+                            } else if (explicitAggregate === 'min') {
+                                bucketTotals[idx] = Math.min(bucketTotals[idx], point.value);
+                            }
+                            // 'first' keeps whatever the bucket already holds.
+                        });
+                        if (explicitAggregate === 'avg') {
+                            for (let i = 0; i < bucketTotals.length; i += 1) {
+                                if (bucketCounts[i] > 1) bucketTotals[i] /= bucketCounts[i];
+                            }
+                        }
+                    } else if (useDailyProjection) {
                         rawPoints.forEach(point => {
                             const idx = energyContext.findBucketIndex(point.t);
                             if (idx < 0 || idx >= bucketTotals.length) return;

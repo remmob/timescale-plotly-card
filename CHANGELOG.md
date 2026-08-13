@@ -1,5 +1,26 @@
 ## Changelog
 
+### 2.1.0 (2026-08-13)
+
+**Added**
+
+- `energy_aggregate` (card level and per series): `sum`, `last`, `first`, `avg`,
+  `min` or `max`. Controls how several readings inside one energy bucket are
+  combined, overriding the mode inferred from `state_class`.
+
+**Fixed**
+
+- Series that are not additive were summed on the wider energy ranges. The mode
+  is inferred from `state_class`, and anything that is not `total_increasing`
+  falls into the delta branch, which adds the readings up. A COP or EER template
+  sensor carries no `state_class`, so on the `years` range — which queries raw
+  rows rather than downsampled buckets — a year of minute readings was summed
+  into a single bar, turning an EER of 5 into 2752. The `today` range hid the
+  problem because each bucket holds a single reading.
+
+  Set `energy_aggregate: last` on such a series. The inference is unchanged for
+  everything else, so existing configurations keep their current behaviour.
+
 ### 2.0.0 (2026-08-13)
 
 **Energy calendar mode**
