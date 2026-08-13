@@ -1,5 +1,16 @@
 ## Changelog
 
+### 2.1.1 (2026-08-13)
+
+**Fixed**
+
+- The navigation listener was never removed. It is registered on
+  `location-changed` but `disconnectedCallback` removed it from `popstate`, so
+  every mount left another live handler behind. Each one calls `loadData()` on
+  every navigation, so a view that is navigated into repeatedly — a shared graph
+  template driven by `?entity=` — fired one extra query per past visit and got
+  progressively slower for the lifetime of the page.
+
 ### 2.1.0 (2026-08-13)
 
 **Added**

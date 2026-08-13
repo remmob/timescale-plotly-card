@@ -32,7 +32,7 @@ function resolveEntityForRange(entityConfig, range) {
  * @license MIT
  */
 
-console.info('%c TIMESCALE-PLOTLY-CARD %c 2.1.0 ', 'color: white; background: #03a9f4; font-weight: bold;', 'color: #03a9f4; background: white; font-weight: bold;');
+console.info('%c TIMESCALE-PLOTLY-CARD %c 2.1.1 ', 'color: white; background: #03a9f4; font-weight: bold;', 'color: #03a9f4; background: white; font-weight: bold;');
 
 /**
  * TimescalePlotlyCard Web Component
@@ -267,6 +267,10 @@ class TimescalePlotlyCard extends HTMLElement {
      */
     connectedCallback() {
         this.registerSyncListener();
+        // Guard against double registration: connectedCallback fires again
+        // whenever Lovelace re-attaches the element, and a stale handler from a
+        // previous mount would otherwise stay subscribed for the page's lifetime.
+        this.unregisterNavHandler();
         // Reload data and title when Lovelace navigates to this view with a different entity
         this._navHandler = () => {
             if (this._initialized && new URLSearchParams(window.location.search).get('entity')) {
@@ -292,12 +296,21 @@ class TimescalePlotlyCard extends HTMLElement {
      * Called when element is removed from DOM
      * Stops auto-refresh timer to prevent memory leaks
      */
+    /* Remove the navigation listener. It is registered on 'location-changed',
+       so it has to be removed from that same event: taking it off 'popstate'
+       silently leaves it subscribed. Every mount then added another live
+       handler, and each one calls loadData() on every navigation, so a view
+       that is navigated into repeatedly - a shared graph template driven by
+       ?entity= - fired an extra query per past visit. */
+    unregisterNavHandler() {
+        if (!this._navHandler) return;
+        window.removeEventListener('location-changed', this._navHandler);
+        this._navHandler = null;
+    }
+
     disconnectedCallback() {
         this.unregisterSyncListener();
-        // Cleanup navigation listener
-        if (this._navHandler) {
-            window.removeEventListener('popstate', this._navHandler);
-        }
+        this.unregisterNavHandler();
         // Cleanup auto-refresh when element is removed
         if (this._refreshInterval) {
             clearInterval(this._refreshInterval);
