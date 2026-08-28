@@ -1,5 +1,73 @@
 ## Changelog
 
+### 2.2.0 (2026-08-28)
+
+**Fixed**
+
+- The navigation listener leak that 2.1.1 tried to remove and 2.1.2 reverted. The listener is
+  registered on `location-changed` but the cleanup removed `popstate`, so nothing was ever released
+  and every remount added another handler, each calling `loadData()` on every navigation.
+
+  Both halves are now correct. The handler is built once and reused, so `addEventListener` on
+  reattach is a no-op and the element holds at most one listener; the cleanup removes the event it
+  actually registered. Because `location-changed` fires while the element is detached, the card also
+  catches up on reattach: `navReloadKey()` resolves the entity the drawn graph belongs to, and a
+  reload only happens when the URL now names a different one. A shared graph template that changes
+  only its `?entity=` query string keeps working — the behaviour 2.1.2 protected — without the leak
+  that came with it.
+
+**Added**
+
+- `number_locale`. Numbers in bar labels, totals boxes, stack totals and tooltips now follow the
+  locale of whoever is looking at the card instead of always printing a dot as the decimal mark. A
+  dot is a thousands separator to most of Europe, so `0.25` euro read as twenty-five. Leave the
+  option out and the browser's own locale is used; set it (`nl-NL`, `en-GB`) to force one.
+
+  Two side effects worth knowing about. Trailing zeros are no longer trimmed — `0.25` used to
+  collapse to `0.2` in some places, and with a locale the trimming regex would eat part of a
+  thousands group. And numbers above 999 now carry a grouping separator.
+
+- `show_stack_total` (default `false`), with `stack_total_decimals`, `stack_total_font_size` and
+  `stack_total_text_color`. Draws the total of a stacked bar just above it. The per-segment labels
+  say how big each part is, which leaves the question the chart is usually about — what does this
+  bucket come to — unanswered. Only applies when `bar_mode` resolves to `stack`; horizontal bars put
+  the label to the right of the stack instead.
+
+- Stacked bars are now measured by the height of the stack when the y-axis range is calculated.
+  The range was pooled from the individual series values, so a stack reaching 0.25 with no single
+  component above 0.10 had its top cut off as soon as `y_margin` was small enough to matter.
+  Positive and negative bars are added up per bucket, the way Plotly draws them.
+
+- `totals_aggregate` (`sum` by default, `avg` optional). The totals boxes add the bars up, which is
+  right for energy but meaningless for a price per kWh or a temperature: adding up twenty-four
+  hourly tariffs produces a number nobody can use. With `avg` every box shows the average over the
+  buckets that hold a value.
+
+  Buckets without a value are skipped instead of counted as zero, so a day in progress is not
+  dragged down by the hours still to come. The trailing box keeps summing the boxes before it, so
+  the components of a stacked chart still add up to the average total.
+
+- `table_summarize` (`max` or `min`, off by default). The data table renders the raw query result,
+  which is grouped by the bucket the selected range produces — a week yields daily buckets, so every
+  series shows up seven times. With this option the table keeps one row per series: the one with the
+  highest or lowest value in the range.
+
+  The whole row is kept, so extra columns from the view (a formatted timestamp, a duration) belong
+  to that same peak. Rows are listed in `entities` order rather than by time, since with one row per
+  series that is the meaningful ordering.
+
+- `hide_empty_series` (default `false`). In `bar_mode: group` Plotly divides every slot over all
+  traces it receives, including the ones without content, which makes the remaining bars
+  unnecessarily narrow. With this option on, such a series is hidden and no longer takes up a slot.
+
+  A series counts as empty when it has no rows, or when every value in the range is zero. That
+  second case is the one that matters in practice: a utility meter for a mode that did not run still
+  reports a value every minute, it just reads `0`, so the internal `hasData` flag is `true`.
+
+  The legend and the totals boxes are untouched: those follow the card's own legend state, so an
+  empty series still shows up with its `0` box. That distinction matters — otherwise you cannot tell
+  whether a series ran and produced nothing, or is not being logged at all.
+
 ### 2.1.2 (2026-08-13)
 
 **Reverted**

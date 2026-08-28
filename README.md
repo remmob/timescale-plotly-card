@@ -266,10 +266,85 @@ Every option below is per series and falls back to the card-level value.
 | `bar_value_font_size` | number | `11` | Bar label size |
 | `bar_value_text_color` / `bar_value_font_color` | string | `font_color` | Bar label colour |
 | `show_grand_total` | boolean | `true` | Show the trailing `= total` box |
+| `show_stack_total` | boolean | `false` | Print the total of each stacked bar above it |
+| `stack_total_decimals` | number | `bar_value_decimals` | Decimals in that total |
+| `stack_total_font_size` | number | `bar_value_font_size` | Size of that total |
+| `stack_total_text_color` | string | `font_color` | Colour of that total |
 | `totals_decimals` | number | `bar_value_decimals` | Decimals in the totals boxes |
+| `number_locale` | string | browser locale | Locale for every number the card prints, e.g. `nl-NL`. Decides the decimal mark and the grouping separator |
+| `totals_aggregate` | string | `sum` | `avg` averages the boxes instead of adding them up, for quantities that do not add up |
 | `series_total_box_width` | string | `108px` | Width of each totals box |
+| `hide_empty_series` | boolean | `false` | Leave series that are empty or all zero out of the plot so the remaining bars get their space |
 
 > The totals row shows one box per visible **bar** series, then `= grand total`. `show_grand_total: false` removes only the last box. To hide the row completely, set `show_total_box: false` on every series.
+
+#### Totals that should not be added up
+
+The boxes add the bars up, which is what you want for energy: twenty-four hourly kWh values make a
+daily total. For a price per kWh, a temperature or a ratio that same sum is meaningless — adding up
+twenty-four hourly tariffs gives a number no one can use. Set `totals_aggregate: avg` and each box
+shows the average over the buckets that have a value.
+
+```yaml
+bar_mode: stack
+totals_aggregate: avg
+totals_decimals: 3
+```
+
+```
+stacked price build-up, a full day
+
+  sum (default)                       avg
+  2.328 + 0.357 + 2.201 + 1.022       0.097 + 0.015 + 0.092 + 0.043
+  = 5.908 EUR/kWh                     = 0.246 EUR/kWh
+```
+
+Empty buckets are skipped rather than counted as zero, so a half-finished day is not dragged down by
+the hours that have not happened yet. The trailing box keeps adding up the boxes before it, so with
+a stacked chart the components still add up to the average total.
+
+#### The total of a stack
+
+Bar labels sit inside their own segment, so on a stacked chart they answer "how big is this part".
+The question such a chart is usually about — what does this hour, this day come to — has no label at
+all. `show_stack_total: true` prints that sum just above the bar.
+
+```yaml
+bar_mode: stack
+show_stack_total: true
+stack_total_decimals: 2
+stack_total_font_size: 9
+show_bar_values: false
+```
+
+Turning the segment labels off is worth considering at the same time: with four components on a bar
+a few dozen pixels wide they are unreadable anyway, and the total above is the number that carries
+the chart. Keep the decimals short, since a full day puts twenty-four of these next to each other.
+
+#### Series without data
+
+In `bar_mode: group` Plotly divides every slot over all traces it receives, empty ones included. A
+heat pump chart with six modes where only two ran that day therefore gets bars a third of the width
+they could have, with four gaps between them.
+
+A series counts as empty when it has no rows at all, **or** when every value in the selected range is
+zero. That second case is the common one: a utility meter for a mode that did not run still reports
+a reading every minute, it just reads `0`. Checking only for missing rows would never trigger.
+
+`hide_empty_series: true` keeps those traces out of the plot, so the remaining bars use the full
+slot:
+
+```yaml
+bar_mode: group
+hide_empty_series: true
+```
+
+The legend and the totals boxes are deliberately left alone. They follow the card's own legend
+state rather than the plot, so an empty series still appears in the legend and still gets its
+`0 kWh` box. Without that you could not tell "this ran and produced nothing" apart from "this is not
+being logged at all".
+
+Off by default, so existing charts keep exactly the layout they had.
 
 ### Gaps and missing data
 
@@ -307,6 +382,38 @@ Every option below is per series and falls back to the card-level value.
 | `show_table` | boolean | `false` | Render the raw query result as a table |
 | `table_columns` | list | auto | Which columns to show, in order |
 | `table_limit` | number | `200` | Maximum rows, newest first |
+| `table_summarize` | string | — | `max` or `min`: collapse to one row per series, the one with the highest or lowest value in the range |
+
+> `table_columns` **orders** the columns, it does not filter them. Anything you leave out is appended
+> after the ones you listed. To show fewer columns, hide the rest with card-mod:
+> `.ts-data-table td:nth-child(n+5), .ts-data-table th:nth-child(n+5) { display: none !important; }`
+
+#### One row per series
+
+The table shows the raw query result, and that is grouped by whatever bucket the selected range
+produces: a week gives daily buckets, so every series appears seven times. When you want the highest
+value *of that week* rather than a list of every day in it, set `table_summarize: max`.
+
+```yaml
+show_chart: false
+show_table: true
+table_summarize: max
+```
+
+```
+week selected, without table_summarize        with table_summarize: max
+  Total power in use  6327 W  15-08 04:45:22    Total power in use  8693 W  12-08 17:39:54
+  Total power in use  5180 W  14-08 18:55:30
+  Total power in use  4063 W  13-08 17:45:57
+  Total power in use  8693 W  12-08 17:39:54
+```
+
+The comparison runs on `avg_state`, the numeric column the reader always returns. The whole winning
+row is kept, so any extra columns of your view — a formatted timestamp, a duration — belong to that
+same peak and not to some other day.
+
+Rows are then listed in the order of your `entities` instead of by time, because with one row per
+series the series order is the meaningful one.
 
 ### Download
 

@@ -45,8 +45,23 @@ console.info('%c TIMESCALE-PLOTLY-CARD %c 2.1.2 ', 'color: white; background: #0
  * 5. loadData() - Queries TimescaleDB via WebSocket and renders chart
  * 6. disconnectedCallback() - Cleanup when removed from DOM
  */
-const TSCARD_VERSION = '2026-03-01-39';
+const TSCARD_VERSION = '2026-03-01-43';
 const TSCARD_SYNC_EVENT = 'timescale-plotly-card-sync';
+
+/* Numbers follow the locale of whoever is looking at the card: 1.234,56 in most
+   of Europe, 1,234.56 in the UK and the US. A plain fixed-decimal format
+   always prints a dot, and a Dutch or German reader takes that for a
+   thousands separator, so 0.25 euro reads as 25. Set number_locale to
+   override the browser's choice. */
+let TSCARD_LOCALE;
+function tscNum(value, decimals) {
+    const number = Number(value);
+    if (!Number.isFinite(number)) return '';
+    return number.toLocaleString(TSCARD_LOCALE, {
+        minimumFractionDigits: decimals,
+        maximumFractionDigits: decimals
+    });
+}
 
 /* How several readings inside one energy bucket may be combined. Only used when
    energy_aggregate is set explicitly; otherwise the mode is inferred from the
@@ -267,16 +282,24 @@ class TimescalePlotlyCard extends HTMLElement {
      */
     connectedCallback() {
         this.registerSyncListener();
-        // Reload data and title when Lovelace navigates to this view with a different entity
-        this._navHandler = () => {
+        // Reload data and title when Lovelace navigates to this view with a different entity.
+        // Built once per element. Home Assistant reuses this element across
+        // navigations, so connectedCallback runs again every time. Creating a
+        // fresh closure each time registered a fresh listener each time, and
+        // because the cleanup below removed a different event name none were
+        // ever released. Reusing one function makes addEventListener a no-op
+        // on reattach, so this element holds at most one listener.
+        if (!this._navHandler) this._navHandler = () => {
             if (this._initialized && new URLSearchParams(window.location.search).get('entity')) {
-                const root = this.shadowRoot || this;
-                const titleEl = root.querySelector('.card-header');
-                if (titleEl) titleEl.textContent = this.resolveTemplateValue(this._config.title);
-                this.loadData();
+                this.reloadForCurrentEntity(true);
             }
         };
         window.addEventListener('location-changed', this._navHandler);
+        // location-changed fires while this element is detached, so the
+        // listener above never sees it. Catch up on reattach: when the URL now
+        // names a different entity than the one currently drawn, reload.
+        // Without this the card keeps showing the previous graph.
+        if (this._initialized) this.reloadForCurrentEntity(false);
         // Start auto-refresh when element is added to DOM
         const refreshSeconds = this._config.auto_refresh || 300;  // Default 5 minutes
         if (refreshSeconds > 0) {
@@ -294,9 +317,12 @@ class TimescalePlotlyCard extends HTMLElement {
      */
     disconnectedCallback() {
         this.unregisterSyncListener();
-        // Cleanup navigation listener
+        // Cleanup navigation listener. The listener is registered as
+        // 'location-changed'; removing 'popstate' released nothing, which is
+        // how detached cards kept reloading on every later navigation.
         if (this._navHandler) {
             window.removeEventListener('popstate', this._navHandler);
+            window.removeEventListener('location-changed', this._navHandler);
         }
         // Cleanup auto-refresh when element is removed
         if (this._refreshInterval) {
@@ -311,6 +337,41 @@ class TimescalePlotlyCard extends HTMLElement {
             this._initialized = true;
             this.render();
         }
+    }
+
+    navReloadKey() {
+        // Identifies the graph currently drawn: the resolved sensor_id, or all
+        // resolved series for a multi entity card. Used to tell "same graph
+        // again" from "a different graph".
+        const config = this._config || {};
+        const parts = [];
+        if (typeof config.sensor_id === 'string') {
+            parts.push(this.resolveTemplateValue(config.sensor_id));
+        }
+        if (Array.isArray(config.entities)) {
+            config.entities.forEach((entry) => {
+                const resolved = this.resolveEntityConfigTemplates(entry);
+                parts.push(typeof resolved === 'string'
+                    ? resolved
+                    : (resolved?.sensor_id || resolved?.entity || ''));
+            });
+        }
+        return parts.join('|');
+    }
+
+    reloadForCurrentEntity(force) {
+        // force: called from the location-changed listener, which only fires
+        // while the element is attached. Reload unconditionally there, matching
+        // the original behaviour.
+        // not force: called on reattach, where an unchanged entity means the
+        // graph on screen is already correct and a reload would be wasted work.
+        if (!this._hass || !this._config) return;
+        const key = this.navReloadKey();
+        if (!force && (!key || key === this._navReloadKey)) return;
+        const root = this.shadowRoot || this;
+        const titleEl = root.querySelector('.card-header');
+        if (titleEl) titleEl.textContent = this.resolveTemplateValue(this._config.title);
+        this.loadData();
     }
 
     isJsTemplateString(value) {
@@ -691,6 +752,7 @@ class TimescalePlotlyCard extends HTMLElement {
                 `;
         const timeSelectorHTML = showTimeSelector ? customRangeHTML : '';
 
+        TSCARD_LOCALE = this._config.number_locale || undefined;
         const showVersionBanner = this._config.show_version_banner === true;
         const versionBannerHTML = showVersionBanner
             ? `<div style="background:#ffcc00;color:#222;font-weight:bold;padding:4px 8px;font-size:14px;text-align:center;border-bottom:2px solid #e6b800;">timescale-plotly-card.js versie: ${TSCARD_VERSION}</div>`
@@ -1220,6 +1282,9 @@ class TimescalePlotlyCard extends HTMLElement {
     }
 
     async loadData() {
+        // Remember which graph this load is for, so a reattach can tell whether
+        // the entity actually changed.
+        this._navReloadKey = this.navReloadKey();
         // --- DEBUG OVERLAY ---
         const root = this.shadowRoot || this;
         const debugEl = root.querySelector('#ts-debug-overlay');
@@ -1373,14 +1438,42 @@ class TimescalePlotlyCard extends HTMLElement {
                     return;
                 }
 
+                /* Vat de tabel samen tot een regel per reeks: die met de hoogste
+                   (of laagste) waarde in het gekozen bereik. Zonder dit krijg je
+                   bij een week zeven regels per reeks, want de tabel toont de
+                   ruwe databaseantwoorden en die zijn gegroepeerd op de bucket
+                   die het bereik oplevert.
+
+                   De hele regel blijft behouden, dus ook de eigen kolommen van
+                   de view: het tijdstip en de duur die bij díe piek horen komen
+                   gewoon mee. Vergelijken gebeurt op avg_state, de numerieke
+                   kolom die de reader altijd teruggeeft. */
+                const summarizeRaw = String(this._config.table_summarize || '').toLowerCase();
+                const summarize = (summarizeRaw === 'max' || summarizeRaw === 'min') ? summarizeRaw : null;
+
                 let rows = [];
+                const bestPerSeries = [];
                 responses.forEach((responseRows, idx) => {
                     const series = seriesConfigs[idx] || {};
                     const seriesName = series.name || series.sensor_id || `series_${idx + 1}`;
                     (Array.isArray(responseRows) ? responseRows : []).forEach((row) => {
-                        rows.push({ series: seriesName, ...row });
+                        const entry = { series: seriesName, ...row };
+                        rows.push(entry);
+                        if (!summarize) return;
+                        const value = Number(row.avg_state);
+                        if (!Number.isFinite(value)) return;
+                        const current = bestPerSeries[idx];
+                        const beter = !current
+                            || (summarize === 'max' ? value > current.value : value < current.value);
+                        if (beter) bestPerSeries[idx] = { value, entry };
                     });
                 });
+
+                if (summarize) {
+                    // In entities order rather than by time: with one row per
+                    // series, the series order is the meaningful one.
+                    rows = bestPerSeries.filter(Boolean).map((item) => item.entry);
+                }
 
                 if (!rows.length) {
                     tableContainerEl.style.display = 'block';
@@ -1401,11 +1494,13 @@ class TimescalePlotlyCard extends HTMLElement {
                 const tableLimit = Number.isFinite(Number(limitRaw)) && Number(limitRaw) > 0
                     ? Math.floor(Number(limitRaw))
                     : 200;
-                const sortedRows = rows.slice().sort((a, b) => {
-                    const ta = new Date(a.time || a.bucket || 0).getTime();
-                    const tb = new Date(b.time || b.bucket || 0).getTime();
-                    return tb - ta;
-                }).slice(0, tableLimit);
+                const sortedRows = (summarize
+                    ? rows.slice()
+                    : rows.slice().sort((a, b) => {
+                        const ta = new Date(a.time || a.bucket || 0).getTime();
+                        const tb = new Date(b.time || b.bucket || 0).getTime();
+                        return tb - ta;
+                    })).slice(0, tableLimit);
 
                 const headerHtml = columns.map((col) => `<th>${escapeHtml(col)}</th>`).join('');
                 const bodyHtml = sortedRows.map((row) => {
@@ -1843,7 +1938,7 @@ class TimescalePlotlyCard extends HTMLElement {
                 const valueLabelRaw = seriesConfig.tooltip_label_text ?? this._config.tooltip_label_text;
                 const valueLabel = this.resolveTemplateValue(valueLabelRaw);
                 const labelText = valueLabel || seriesName || 'Value';
-                const formatValue = (val) => (Number.isFinite(val) ? Number(val).toFixed(2) : '—');
+                const formatValue = (val) => (Number.isFinite(val) ? tscNum(val, 2) : '—');
 
                 const stateMapRaw = seriesConfig.state_map || this._config.state_map;
                 const stateMap = stateMapRaw
@@ -2223,8 +2318,39 @@ class TimescalePlotlyCard extends HTMLElement {
             const rightSeries = seriesData.filter(series => series.axisSide === 'right');
             const leftBinaryLabels = leftSeries.find(s => s.binaryLabels)?.binaryLabels || null;
             const rightBinaryLabels = rightSeries.find(s => s.binaryLabels)?.binaryLabels || null;
-            const leftYAll = leftSeries.flatMap(series => series.y || []);
-            const rightYAll = rightSeries.flatMap(series => series.y || []);
+            /* Stacked bars reach as high as the sum of the stack, not as high
+               as its tallest series, so pooling the raw values would cut the top
+               off. Per bucket the positive and the negative bars are added up
+               separately, the way Plotly draws them, and those totals go into
+               the pool instead of the individual bars. Series that are not
+               stacked bars keep contributing their own values. */
+            const barsAreStacked = String(this._config.bar_mode || this._config.barmode
+                || (energyMode ? 'stack' : 'group')).toLowerCase() === 'stack';
+            const axisValues = (axisSeries) => {
+                const stackable = axisSeries.filter(series =>
+                    String(series.chartType || 'line').toLowerCase() === 'bar');
+                if (!barsAreStacked || stackable.length < 2) {
+                    return axisSeries.flatMap(series => series.y || []);
+                }
+                const rest = axisSeries.filter(series => !stackable.includes(series));
+                const length = Math.max(...stackable.map(series => (series.y || []).length), 0);
+                const totals = [];
+                for (let i = 0; i < length; i++) {
+                    let up = 0;
+                    let down = 0;
+                    let filled = false;
+                    stackable.forEach((series) => {
+                        const value = Number((series.y || [])[i]);
+                        if (!Number.isFinite(value)) return;
+                        filled = true;
+                        if (value >= 0) up += value; else down += value;
+                    });
+                    if (filled) totals.push(up, down);
+                }
+                return totals.concat(rest.flatMap(series => series.y || []));
+            };
+            const leftYAll = axisValues(leftSeries);
+            const rightYAll = axisValues(rightSeries);
             const allY = seriesData.flatMap(series => series.y || []);
             const finiteY = allY.filter(v => Number.isFinite(v));
             if (finiteY.length === 0) {
@@ -2271,8 +2397,11 @@ class TimescalePlotlyCard extends HTMLElement {
                 : (Number.isFinite(Number(this._config.bar_value_decimals)) ? Math.max(0, Number(this._config.bar_value_decimals)) : 2);
             const formatTotalValue = (value) => {
                 if (!Number.isFinite(value)) return '0';
-                const fixed = Number(value).toFixed(totalsDecimals);
-                return fixed.replace(/\.0+$/, '').replace(/(\.\d*?)0+$/, '$1');
+                /* Trailing zeros used to be trimmed with a regex on the
+                   dot. That cannot survive a locale where the dot separates
+                   thousands: 1.000,00 would come back as 1.000, — so the
+                   number keeps the decimals that were asked for. */
+                return tscNum(value, totalsDecimals);
             };
             const updateSeriesTotals = () => {
                 if (!totalsEl) return;
@@ -2288,10 +2417,21 @@ class TimescalePlotlyCard extends HTMLElement {
                     return;
                 }
 
-                const seriesTotals = visibleBarSeries.map(({ series }) => ({
-                    series,
-                    total: (series.y || []).reduce((sum, value) => Number.isFinite(value) ? (sum + Number(value)) : sum, 0)
-                }));
+                /* The box adds the bars up by default. For quantities that
+                   do not add up (a price per kWh, a temperature) that sum is
+                   meaningless, and totals_aggregate: avg gives the average over
+                   the filled buckets instead. The final box keeps adding up the
+                   boxes before it, so four averaged price components still add
+                   up to the average all-in price. */
+                const totalsAggregate = String(this._config.totals_aggregate || 'sum').toLowerCase();
+                const seriesTotals = visibleBarSeries.map(({ series }) => {
+                    const values = (series.y || []).filter(value => Number.isFinite(value));
+                    const sum = values.reduce((acc, value) => acc + Number(value), 0);
+                    return {
+                        series,
+                        total: (totalsAggregate === 'avg' && values.length) ? (sum / values.length) : sum
+                    };
+                });
                 const grandTotal = seriesTotals.reduce((sum, item) => sum + item.total, 0);
                 const unitCandidates = [...new Set(seriesTotals.map(item => String(item.series.unitValue || '').trim()).filter(Boolean))];
                 const totalUnit = unitCandidates.length ? unitCandidates[0] : '';
@@ -2354,6 +2494,23 @@ class TimescalePlotlyCard extends HTMLElement {
                 axisTitleRightEl.textContent = rightAxisTitle || '';
             }
 
+            // Series without content do not need to take up a slot. In bar mode
+            // group Plotly divides every slot over all the traces it receives,
+            // the empty ones included; with six series of which four sit at zero
+            // every remaining bar ends up unnecessarily narrow.
+            //
+            // Note: series.hasData only says there were rows in the bucket, not
+            // that anything was in them. A utility meter reporting 0 all day long
+            // has hasData true. That is why the values themselves are inspected
+            // here.
+            //
+            // The card's own HTML legend and the totals boxes follow
+            // _legendVisibility and do stay put: you can still see that the
+            // series exists and that it sat at zero.
+            const hideEmptySeries = this._config.hide_empty_series === true;
+            const seriesIsEmpty = (series) => !series.hasData
+                || !(series.y || []).some(v => Number.isFinite(v) && v !== 0);
+
             if (!Array.isArray(this._legendVisibility) || this._legendVisibility.length !== seriesData.length) {
                 this._legendVisibility = seriesData.map((_, idx) => this._legendVisibility?.[idx] ?? true);
             }
@@ -2398,7 +2555,9 @@ class TimescalePlotlyCard extends HTMLElement {
                     name: series.name,
                     showlegend: showLegend,
                     yaxis: series.axisSide === 'right' ? 'y2' : 'y',
-                    visible: this._legendVisibility[index] ? true : false,
+                    visible: this._legendVisibility[index]
+                        ? !(hideEmptySeries && seriesIsEmpty(series))
+                        : false,
                     meta: {
                         labelText: series.labelText,
                         unitValue: series.unitValue,
@@ -2504,8 +2663,7 @@ class TimescalePlotlyCard extends HTMLElement {
                         : 2;
                     const formatBarValue = (value) => {
                         if (!Number.isFinite(value)) return '';
-                        const fixed = Number(value).toFixed(decimals);
-                        return fixed.replace(/\.?0+$/, '');
+                        return tscNum(value, decimals);
                     };
 
                     barTraces.forEach((trace) => {
@@ -2524,6 +2682,54 @@ class TimescalePlotlyCard extends HTMLElement {
                             color: trace.meta?.barValueTextColor || this._config.bar_value_text_color || this._config.bar_value_font_color || this._config.font_color || 'var(--primary-text-color, #e1e1e1)'
                         };
                     });
+                }
+
+                /* One label above the whole stack. The per-segment labels answer
+                   "how big is this part", which leaves the question the chart is
+                   usually about — what does this bucket add up to — unanswered.
+                   Off by default, and only meaningful when the bars are stacked. */
+                if (this._config.show_stack_total === true && layout.barmode === 'stack') {
+                    const stackTraces = traces.filter(trace => trace.type === 'bar' && trace.visible !== false);
+                    const stackDecimals = Number.isFinite(Number(this._config.stack_total_decimals))
+                        ? Math.max(0, Number(this._config.stack_total_decimals))
+                        : (Number.isFinite(Number(this._config.bar_value_decimals))
+                            ? Math.max(0, Number(this._config.bar_value_decimals))
+                            : 2);
+                    const stackLength = Math.max(0, ...stackTraces.map(trace =>
+                        ((barIsHorizontal ? trace.x : trace.y) || []).length));
+                    for (let i = 0; i < stackLength; i++) {
+                        let total = 0;
+                        let position;
+                        let filled = false;
+                        stackTraces.forEach((trace) => {
+                            const values = (barIsHorizontal ? trace.x : trace.y) || [];
+                            const value = Number(values[i]);
+                            if (!Number.isFinite(value)) return;
+                            total += value;
+                            filled = true;
+                            position = ((barIsHorizontal ? trace.y : trace.x) || [])[i];
+                        });
+                        if (!filled || position === undefined) continue;
+                        annotations.push({
+                            x: barIsHorizontal ? total : position,
+                            y: barIsHorizontal ? position : total,
+                            xref: 'x',
+                            yref: 'y',
+                            text: tscNum(total, stackDecimals),
+                            showarrow: false,
+                            xanchor: barIsHorizontal ? 'left' : 'center',
+                            yanchor: barIsHorizontal ? 'middle' : 'bottom',
+                            xshift: barIsHorizontal ? 4 : 0,
+                            yshift: barIsHorizontal ? 0 : 4,
+                            font: {
+                                size: Number(this._config.stack_total_font_size)
+                                    || Number(this._config.bar_value_font_size) || 11,
+                                color: this._config.stack_total_text_color
+                                    || this._config.font_color
+                                    || 'var(--primary-text-color, #e1e1e1)'
+                            }
+                        });
+                    }
                 }
             }
 
@@ -2681,7 +2887,7 @@ class TimescalePlotlyCard extends HTMLElement {
                     // Collect all series values at this index
                     const hLines = seriesData.map((s) => {
                         const val = s?.y?.[ptIdx];
-                        const fVal = Number.isFinite(val) ? Number(val).toFixed(2) : '—';
+                        const fVal = Number.isFinite(val) ? tscNum(val, 2) : '—';
                         const unit = s?.unitValue ? ` ${s.unitValue}` : '';
                         const color = s?.lineColor || 'currentColor';
                         return `<span style="color:${color};">${s?.name || ''}</span>: <b>${fVal}${unit}</b>`;
@@ -2701,7 +2907,7 @@ class TimescalePlotlyCard extends HTMLElement {
                     if (showStatusText) {
                         statusEl.textContent = `${formatted} • ${seriesData.map((s, si) => {
                             const val = s?.y?.[ptIdx];
-                            const fVal = Number.isFinite(val) ? Number(val).toFixed(2) : '—';
+                            const fVal = Number.isFinite(val) ? tscNum(val, 2) : '—';
                             const unit = s?.unitValue ? ` ${s.unitValue}` : '';
                             return `${s?.name || ''}: ${fVal}${unit}`;
                         }).join(' • ')}`;
@@ -2723,14 +2929,14 @@ class TimescalePlotlyCard extends HTMLElement {
                 const lines = isMultiSeries
                     ? seriesData.map((series) => {
                         const pointValueRaw = getTooltipValueAtTime(series, hoverTime);
-                        const pointValue = Number.isFinite(pointValueRaw) ? Number(pointValueRaw).toFixed(2) : '—';
+                        const pointValue = Number.isFinite(pointValueRaw) ? tscNum(pointValueRaw, 2) : '—';
                         const unitLabel = series.labelText || series.name || labelText;
                         const unitSuffix = series.unitValue ? ` ${series.unitValue}` : '';
                         return `${unitLabel}: <b>${pointValue}${unitSuffix}</b>`;
                     })
                     : (() => {
                         const pointValueRaw = getTooltipValueAtTime(seriesData[0], hoverTime);
-                        const pointValue = Number.isFinite(pointValueRaw) ? Number(pointValueRaw).toFixed(2) : '—';
+                        const pointValue = Number.isFinite(pointValueRaw) ? tscNum(pointValueRaw, 2) : '—';
                         const unitSuffix = unitSuffixValue ? ` ${unitSuffixValue}` : '';
                         return [`${labelText}: <b>${pointValue}${unitSuffix}</b>`];
                     })();
@@ -2875,7 +3081,7 @@ class TimescalePlotlyCard extends HTMLElement {
                     const statusParts = [];
                     seriesData.forEach(s => {
                         const val = s?.y?.[baseIndex];
-                        const fVal = Number.isFinite(val) ? Number(val).toFixed(2) : '—';
+                        const fVal = Number.isFinite(val) ? tscNum(val, 2) : '—';
                         const unit = s?.unitValue ? ` ${s.unitValue}` : '';
                         const label = s?.name || '';
                         const color = s?.lineColor || 'currentColor';
@@ -2925,13 +3131,13 @@ class TimescalePlotlyCard extends HTMLElement {
                         const value = getTooltipValueAtTime(series, targetTime);
                         const unitSuffix = series.unitValue ? ` ${series.unitValue}` : '';
                         const label = series.labelText || series.name || labelText;
-                        const displayVal = Number.isFinite(value) ? Number(value).toFixed(2) : '—';
+                        const displayVal = Number.isFinite(value) ? tscNum(value, 2) : '—';
                         tooltipLines.push(`${label}: <b>${displayVal}${unitSuffix}</b>`);
                         statusParts.push(`${label}: ${displayVal}${unitSuffix}`);
                     });
                 } else {
                     const nearestValueRaw = getTooltipValueAtTime(seriesData[0], targetTime);
-                    const nearestValue = Number.isFinite(nearestValueRaw) ? Number(nearestValueRaw).toFixed(2) : '—';
+                    const nearestValue = Number.isFinite(nearestValueRaw) ? tscNum(nearestValueRaw, 2) : '—';
                     const unitSuffix = unitSuffixValue ? ` ${unitSuffixValue}` : '';
                     tooltipLines.push(`${labelText}: <b>${nearestValue}${unitSuffix}</b>`);
                     statusParts.push(`${labelText}: ${nearestValue}${unitSuffix}`);
