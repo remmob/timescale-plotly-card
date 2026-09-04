@@ -1,6 +1,7 @@
 # Timescale Plotly Card
 
 [![hacs_badge](https://img.shields.io/badge/HACS-Custom-orange.svg)](https://github.com/custom-components/hacs)
+![Version](https://img.shields.io/github/v/release/remmob/timescale-plotly-card 'Release') ![Downloads](https://img.shields.io/github/downloads/remmob/timescale-plotly-card/total 'Downloads')
 
 > ⚠️ This card is under development. Options may change between releases.
 
