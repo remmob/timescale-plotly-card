@@ -1,0 +1,24 @@
+name: Attach HACS release asset
+
+# HACS installs this plugin as a single JS file (hacs.json: filename, no
+# zip_release), so the asset here is the card file itself. GitHub never
+# counts downloads of the auto-generated source archive, only real uploaded
+# assets, so this is also what makes the download counter work.
+on:
+  release:
+    types: [published]
+
+permissions:
+  contents: write
+
+jobs:
+  attach-asset:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout the released tag
+        uses: actions/checkout@v4
+
+      - name: Upload the card file to the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release upload "${{ github.event.release.tag_name }}" "timescale-plotly-card.js" --clobber -R ${{ github.repository }}
